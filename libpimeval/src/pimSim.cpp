@@ -962,7 +962,7 @@ pimSim::pimAesInverseSbox(PimObjId src, PimObjId dest, const std::vector<uint8_t
 }
 
 bool
-pimSim::pimFuse(PimProg prog)
+pimSim::pimFuse(PimFusionBlock prog)
 {
   pimPerfMon perfMon("pimFuse");
   if (!isValidDevice()) { return false; }

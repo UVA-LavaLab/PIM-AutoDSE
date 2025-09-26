@@ -132,7 +132,7 @@ public:
   bool pimMAC(PimObjId src1, PimObjId src2, void* dest);
 
   // PIM API Fusion
-  bool pimFuse(PimProg prog);
+  bool pimFuse(PimFusionBlock prog);
 
   // BitSIMD-V micro ops
   bool pimOpReadRowToSa(PimObjId src, unsigned ofst);

@@ -569,7 +569,7 @@ pimShiftBitsLeft(PimObjId src, PimObjId dest, unsigned shiftAmount)
 
 //! @brief  Execute fused PIM APIs
 PimStatus
-pimFuse(PimProg prog)
+pimFuse(PimFusionBlock prog)
 {
   bool ok = pimSim::get()->pimFuse(prog);
   return ok ? PIM_OK : PIM_ERROR;

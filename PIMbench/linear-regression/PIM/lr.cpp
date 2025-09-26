@@ -95,7 +95,7 @@ void linearRegression(uint64_t dataSize, const std::vector<int> &X, const std::v
   }
   
 
-  PimProg prog;
+  PimFusionBlock prog;
   prog.add(pimCopyHostToDevice, (void *)(X.data()), srcObj1, 0UL, 0UL);
   prog.add(pimRedSum, srcObj1, static_cast<void*>(&SX), 0UL, 0UL);
   prog.add(pimMul, srcObj1, srcObj1, srcObj2);
