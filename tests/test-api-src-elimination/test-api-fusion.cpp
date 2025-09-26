@@ -49,7 +49,7 @@ bool testFused(PimDeviceEnum deviceType)
   status = pimCopyObjectToObject(objSrc1, objDest1);
   assert(status == PIM_OK);
   // Fused PIM APIs
-  PimProg prog;
+  PimFusionBlock prog;
   for (uint64_t i = 1; i < 10; ++i) {
     prog.add(pimMul, objSrc1, objDest1, objDest1);
   }

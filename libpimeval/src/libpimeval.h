@@ -247,25 +247,25 @@ PimStatus pimAesInverseSbox(PimObjId src, PimObjId dest, const std::vector<uint8
 // Experimental Feature: PIM API Fusion                                       //
 ////////////////////////////////////////////////////////////////////////////////
 
-struct PimProgApi {
+struct PimApi {
   std::function<PimStatus()> m_api;
   std::vector<std::any> m_args;
   void* m_funcPtr = nullptr;
 };
 
-struct PimProg {
+struct PimFusionBlock {
   template <typename... Args>
   void add(PimStatus(*api)(Args...), Args... args) {
-    PimProgApi progApi;
+    PimApi progApi;
     progApi.m_api = [=]() { return api(args...); };
     progApi.m_args = {args...};
     progApi.m_funcPtr = reinterpret_cast<void*>(api);
     m_apis.push_back(progApi);
   }
-  std::vector<PimProgApi> m_apis;
+  std::vector<PimApi> m_apis;
 };
 
-PimStatus pimFuse(PimProg prog);
+PimStatus pimFuse(PimFusionBlock prog);
 
 ////////////////////////////////////////////////////////////////////////////////
 // Warning: Avoid using below customized APIs for functional simulation       //

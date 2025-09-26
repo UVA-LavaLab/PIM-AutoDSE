@@ -91,7 +91,7 @@ void vectorAddition(uint64_t vectorLength, std::vector<int> &src1, std::vector<i
     return;
   }
 
-  PimProg prog;
+  PimFusionBlock prog;
   prog.add(pimCopyHostToDevice, (void *)(src1.data()), srcObj1, 0UL, 0UL);
   prog.add(pimCopyHostToDevice, (void *)(src2.data()), srcObj2, 0UL, 0UL); 
   prog.add(pimAdd, srcObj1, srcObj2, srcObj1);

@@ -16,12 +16,12 @@
 class pimCmdFuse : public pimCmd
 {
 public:
-  pimCmdFuse(PimProg prog) : pimCmd(PimCmdEnum::NOOP), m_prog(prog) {}
+  pimCmdFuse(PimFusionBlock prog) : pimCmd(PimCmdEnum::NOOP), m_prog(prog) {}
   virtual ~pimCmdFuse() {}
   virtual bool execute() override;
   virtual bool updateStats() const override;
 private:
-  PimProg m_prog;
+  PimFusionBlock m_prog;
   inline PimCmdEnum pimAPItoPimCmdEnum(void* apiPtr) const {
     if (apiPtr == reinterpret_cast<void*>(&pimCopyHostToDevice)) {
       return PimCmdEnum::COPY_H2D;
@@ -147,7 +147,7 @@ private:
     }
   }
 
-  inline pimeval::cmdNode cmdTupleToNode(PimCmdEnum cmdType, const PimProgApi& progAPI, size_t idx) const {
+  inline pimeval::cmdNode cmdTupleToNode(PimCmdEnum cmdType, const PimApi& progAPI, size_t idx) const {
    std::vector<pimObjInfo*> objPtrs;
     for (const auto& arg : progAPI.m_args) {
       if (arg.type() == typeid(PimObjId)) {

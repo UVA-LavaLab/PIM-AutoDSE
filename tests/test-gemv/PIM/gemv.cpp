@@ -102,7 +102,7 @@ void gemv(uint64_t row, uint64_t col, std::vector<int> &srcVector, std::vector<s
     return;
   }
   
-  PimProg prog;
+  PimFusionBlock prog;
   prog.add(pimBroadcastInt, dstObj, static_cast<int64_t>(0));
   for (uint64_t i = 0; i < col; ++i)
   {

@@ -81,7 +81,7 @@ struct Params getInputParams(int argc, char **argv)
 
 void gemv(uint64_t row, uint64_t col, std::vector<int> &srcVector, std::vector<std::vector<int>> &srcMatrix, std::vector<int> &dst)
 {
-  PimProg prog;
+  PimFusionBlock prog;
   // Emitting Allocations
   PimObjId fuse_root = pimAlloc(PIM_ALLOC_AUTO, col, PIM_INT8);
   PimObjId fuse_expr_0 = pimAllocAssociated(fuse_root, PIM_BOOL);
