@@ -621,11 +621,22 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
     switch (ev->type)
     {
     case pimeval::EventType::ACTIVATE_READ:
-    case pimeval::EventType::ACTIVATE_WRITE:
     {  
       ev->cycleCount = m_tRCDRD;
       ev->energyConsumed = m_eACT * numCores;
       cycleRequired = m_tRCDRD;
+      for (auto c : ev->consumers) {
+        if (c->type == pimeval::EventType::PRECHARGE_READ || c->type == pimeval::EventType::PRECHARGE_WRITE) {
+          c->earliestCycle = currCycle + m_tRAS;
+        }
+      }
+      break;
+    }
+    case pimeval::EventType::ACTIVATE_WRITE:
+    {  
+      ev->cycleCount = m_tRCDWR;
+      ev->energyConsumed = m_eACT * numCores;
+      cycleRequired = m_tRCDWR;
       for (auto c : ev->consumers) {
         if (c->type == pimeval::EventType::PRECHARGE_READ || c->type == pimeval::EventType::PRECHARGE_WRITE) {
           c->earliestCycle = currCycle + m_tRAS;
@@ -1272,6 +1283,35 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
         memEv->stalledCycle = memEv->earliestCycle - clockCycle; // Advance clock if necessary
         clockCycle = memEv->earliestCycle;
       }
+      switch (memEv->type)
+      {
+      case pimeval::EventType::ACTIVATE_READ:
+      case pimeval::EventType::ACTIVATE_WRITE:
+      {
+          ++perfEnergies[memEv->cmdID].m_totalACT;
+          break;
+      }
+      case pimeval::EventType::READ_SRC1:
+      case pimeval::EventType::READ_SRC2:
+      case pimeval::EventType::READ_SCALAR:
+      case pimeval::EventType::WRITE_CHUNK:
+      {
+          ++perfEnergies[memEv->cmdID].m_totalCAS;
+          break;
+      }
+      case pimeval::EventType::PRECHARGE_READ:
+      case pimeval::EventType::PRECHARGE_WRITE:
+      {
+          ++perfEnergies[memEv->cmdID].m_totalPRE;
+          break;
+      }
+      default:
+      {
+        std::printf("[ERROR] Invalid memory event type for EventID: %lu, CmdID: %zu, Type: %s\n",
+                    memEv->eventID, memEv->cmdID, toString(memEv->type).c_str());
+        break;
+      }
+      }
       memCycles = executeMemoryEvent(memEv, clockCycle);
       // std::printf("[Cycle %lu] Scheduling MEM EventID: %lu, CmdID: %zu, Type: %s, Duration: %d cycles, Ready at: %lu\n",
       //           clockCycle, memEv->eventID, memEv->cmdID, toString(memEv->type).c_str(), memCycles, memReady);
@@ -1301,8 +1341,10 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
         compReady = clockCycle;
         compEv->hasExecuted = true; // Mark as executed
         computeEvents.erase(computeEvents.begin());
+        ++perfEnergies[compEv->cmdID].m_totalL;
       }
       if (compCycles > 0) {
+        ++perfEnergies[compEv->cmdID].m_totalL;
         hasCompute = true;
         compReady = clockCycle + compCycles;
         compEv->hasExecuted = true; // Mark as executed
@@ -1367,7 +1409,7 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
 //! @brief Perf energy model of bank-level PIM for PIM Prog
 std::vector<pimeval::perfEnergy>
 pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& cmdGraph) const {
-  std::vector<pimeval::perfEnergy> perfEnergies(cmdGraph.size(), pimeval::perfEnergy(0, 0, 0, 0, 0, 0));
+  std::vector<pimeval::perfEnergy> perfEnergies(cmdGraph.size(), pimeval::perfEnergy(0, 0, 0, 0, 0, 0, 0, 0, 0));
   auto broadcastShouldWriteBack = [&](const pimeval::cmdNode& node) -> bool {
     for (auto& c : node.consumers) {
       if (cmdGraph[c].cmdType == PimCmdEnum::COPY_D2H) {

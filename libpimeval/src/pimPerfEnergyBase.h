@@ -32,8 +32,8 @@ namespace pimeval {
   class perfEnergy
   {
     public:
-      perfEnergy() : m_msRuntime(0.0), m_mjEnergy(0.0), m_msRead(0.0), m_msWrite(0.0), m_msCompute(0.0), m_totalOp(0) {}
-      perfEnergy(double msRuntime, double mjEnergy, double msRead, double msWrite, double msCompute, uint64_t totalOp) : m_msRuntime(msRuntime), m_mjEnergy(mjEnergy), m_msRead(msRead), m_msWrite(msWrite), m_msCompute(msCompute), m_totalOp(totalOp)  {}
+      perfEnergy() : m_msRuntime(0.0), m_mjEnergy(0.0), m_msRead(0.0), m_msWrite(0.0), m_msCompute(0.0), m_totalOp(0), m_totalACT(0), m_totalPRE(0), m_totalCAS(0), m_totalL(0) {}
+      perfEnergy(double msRuntime, double mjEnergy, double msRead, double msWrite, double msCompute, uint64_t totalOp, uint64_t totalACT = 0, uint64_t totalPRE = 0, uint64_t totalCAS = 0, uint64_t totalL = 0) : m_msRuntime(msRuntime), m_mjEnergy(mjEnergy), m_msRead(msRead), m_msWrite(msWrite), m_msCompute(msCompute), m_totalOp(totalOp), m_totalACT(totalACT), m_totalPRE(totalPRE), m_totalCAS(totalCAS), m_totalL(totalL) {}
 
       double m_msRuntime;
       double m_mjEnergy;
@@ -41,6 +41,10 @@ namespace pimeval {
       double m_msWrite;
       double m_msCompute;
       uint64_t m_totalOp;
+      uint64_t m_totalACT;
+      uint64_t m_totalPRE;
+      uint64_t m_totalCAS;
+      uint64_t m_totalL;
   };
 
   //! @struct cmdNode
