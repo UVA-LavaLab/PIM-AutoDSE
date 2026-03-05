@@ -94,12 +94,22 @@ pimStatsMgr::showDeviceParams() const
   if (pimSim::get()->isDebug(pimSimConfig::DEBUG_PERF)) {
     std::printf(" %30s : %f\n", "AAP (ns)", paramsDram.getNsAAP());
   }
+  std::printf("----------------------------------------\n");
+  std::printf("DRAM Params:\n");
+  std::printf(" %30s : %f\n", "tCK (ns)",        paramsDram.gettCK());
+  std::printf(" %30s : %d\n", "tRCD_RD (cycle)", (int)paramsDram.gettRCDRD());
+  std::printf(" %30s : %d\n", "tRCD_WR (cycle)", (int)paramsDram.gettRCDWR());
+  std::printf(" %30s : %d\n", "tRP (cycle)",     (int)paramsDram.gettRP());
+  std::printf(" %30s : %d\n", "tRAS (cycle)",    (int)paramsDram.gettRAS());
+  std::printf(" %30s : %d\n", "tCCD_S (cycle)",  (int)paramsDram.gettCCD_S());
+  std::printf(" %30s : %d\n", "tCCD_L (cycle)",  (int)paramsDram.gettCCD_L());
 }
 
 //! @brief  Show data copy stats
 void
 pimStatsMgr::showCopyStats() const
 {
+  std::printf("----------------------------------------\n");
   std::printf("Data Copy Stats:\n");
   uint64_t bytesCopiedMainToDevice = m_bitsCopiedMainToDevice / 8;
   uint64_t bytesCopiedDeviceToMain = m_bitsCopiedDeviceToMain / 8;
@@ -126,6 +136,10 @@ pimStatsMgr::showCmdStats() const
   double totalMsWrite = 0.0;
   double totalMsCompute = 0.0;
   uint64_t totalOp = 0;
+  uint64_t totalActivate = 0;
+  uint64_t totalPrecharge = 0;
+  uint64_t totalCAS = 0;
+  uint64_t totalL = 0;
   for (const auto& it : m_cmdPerf) {
     double cmdRuntime = it.second.second.m_msRuntime;
     double percentRead = cmdRuntime == 0.0 ? 0.0 : (it.second.second.m_msRead * 100 / cmdRuntime);
@@ -141,8 +155,19 @@ pimStatsMgr::showCmdStats() const
     totalMsWrite += it.second.second.m_msWrite;
     totalMsCompute += it.second.second.m_msCompute;
     totalOp += it.second.second.m_totalOp;
+    totalActivate += it.second.second.m_totalACT;
+    totalPrecharge += it.second.second.m_totalPRE;
+    totalCAS += it.second.second.m_totalCAS;
+    totalL += it.second.second.m_totalL;
   }
   std::printf(" %44s : %10d %14f %14f %14f %7.4f %7.4f %7.4f\n", "TOTAL ---------", totalCmd, totalMsRuntime, totalMjEnergy, (totalOp * 1.0 / totalMjEnergy * 1e-6), (totalMsRead * 100 / totalMsRuntime), (totalMsWrite * 100 / totalMsRuntime), (totalMsCompute * 100/ totalMsRuntime) );
+  if (totalActivate > 0 || totalPrecharge > 0 || totalCAS > 0 || totalL > 0) {
+    std::printf("----------------------------------------\n");
+    std::printf(" %44s : %10s %14llu\n", "TOTAL ACT:---------", " ", (unsigned long long)totalActivate);
+    std::printf(" %44s : %10s %14llu\n", "TOTAL PRE:---------", " ", (unsigned long long)totalPrecharge);
+    std::printf(" %44s : %10s %14llu\n", "TOTAL CAS:---------", " ", (unsigned long long)totalCAS);
+    std::printf(" %44s : %10s %14llu\n", "TOTAL Compute:--------", " ", (unsigned long long)totalL);
+  }
   // analyze micro-ops
   int numR = 0;
   int numW = 0;
@@ -192,6 +217,10 @@ pimStatsMgr::recordCmd(const std::string& cmdName, pimeval::perfEnergy mPerfEner
   item.second.m_msWrite += mPerfEnergy.m_msWrite;
   item.second.m_msCompute += mPerfEnergy.m_msCompute;
   item.second.m_totalOp += mPerfEnergy.m_totalOp;
+  item.second.m_totalACT += mPerfEnergy.m_totalACT;
+  item.second.m_totalPRE += mPerfEnergy.m_totalPRE;
+  item.second.m_totalCAS += mPerfEnergy.m_totalCAS;
+  item.second.m_totalL += mPerfEnergy.m_totalL;
 }
 
 //! @brief  Record estimated runtime and energy of data copy

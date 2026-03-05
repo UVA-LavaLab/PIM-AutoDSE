@@ -1932,6 +1932,31 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
         memEv->stalledCycle = memEv->earliestCycle - clockCycle; // Advance clock if necessary
         clockCycle = memEv->earliestCycle;
       }
+       switch (memEv->type)
+      {
+      case pimeval::EventType::ACTIVATE_READ:
+      case pimeval::EventType::ACTIVATE_WRITE:
+      {
+          ++perfEnergies[memEv->cmdID].m_totalACT;
+          break;
+      }
+      case pimeval::EventType::READ_SRC1:
+      case pimeval::EventType::READ_SRC2:
+      case pimeval::EventType::READ_SCALAR:
+      case pimeval::EventType::WRITE_CHUNK:
+      {
+          ++perfEnergies[memEv->cmdID].m_totalCAS;
+          break;
+      }
+      case pimeval::EventType::PRECHARGE_READ:
+      case pimeval::EventType::PRECHARGE_WRITE:
+      {
+          ++perfEnergies[memEv->cmdID].m_totalPRE;
+          break;
+      }
+      default:
+        break;
+      }
       memCycles = executeMemoryEvent(memEv, clockCycle);
       // std::printf("[Cycle %lu] Scheduling MEM EventID: %lu, CmdID: %zu, Type: %s, Duration: %d cycles, Ready at: %lu\n",
       //           clockCycle, memEv->eventID, memEv->cmdID, toString(memEv->type).c_str(), memCycles, memReady);
@@ -1960,6 +1985,7 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
         compReady = clockCycle;
         compEv->hasExecuted = true; // Mark as executed
         computeEvents.erase(computeEvents.begin());
+        ++perfEnergies[compEv->cmdID].m_totalL;
       }
       if (compCycles > 0) {
         hasCompute = true;
@@ -1968,6 +1994,7 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
         computeEvents.erase(computeEvents.begin());
         perfEnergies[compEv->cmdID].m_msCompute += compCycles * m_tCK;
         perfEnergies[compEv->cmdID].m_mjEnergy += compEv->energyConsumed;
+        ++perfEnergies[compEv->cmdID].m_totalL;
         if (lastMemEv.first != nullptr && lastMemEv.second > 0) {
           lastMemEv.second -= compCycles * m_tCK; // Adjust last memory event duration
           lastMemEv.second = std::max(lastMemEv.second, 0.0); // Ensure non-negative
@@ -2038,7 +2065,7 @@ pimPerfEnergyAquabolt::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& cm
     return false;
   };
   
-  std::vector<pimeval::perfEnergy> perfEnergies(cmdGraph.size(), pimeval::perfEnergy(0, 0, 0, 0, 0, 0));
+  std::vector<pimeval::perfEnergy> perfEnergies(cmdGraph.size(), pimeval::perfEnergy(0, 0, 0, 0, 0, 0, 0, 0, 0));
   std::unordered_map<PimObjId, bool> inVectorRegister;
   std::unordered_map<PimObjId, bool> inScalarRegister;
   std::unordered_map<PimObjId, std::pair<size_t, uint64_t>> shouldWriteBack;
