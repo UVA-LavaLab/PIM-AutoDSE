@@ -94,12 +94,22 @@ pimStatsMgr::showDeviceParams() const
   if (pimSim::get()->isDebug(pimSimConfig::DEBUG_PERF)) {
     std::printf(" %30s : %f\n", "AAP (ns)", paramsDram.getNsAAP());
   }
+  std::printf("----------------------------------------\n");
+  std::printf("DRAM Params:\n");
+  std::printf(" %30s : %f\n", "tCK (ns)",        paramsDram.gettCK());
+  std::printf(" %30s : %d\n", "tRCD_RD (cycle)", (int)paramsDram.gettRCDRD());
+  std::printf(" %30s : %d\n", "tRCD_WR (cycle)", (int)paramsDram.gettRCDWR());
+  std::printf(" %30s : %d\n", "tRP (cycle)",     (int)paramsDram.gettRP());
+  std::printf(" %30s : %d\n", "tRAS (cycle)",    (int)paramsDram.gettRAS());
+  std::printf(" %30s : %d\n", "tCCD_S (cycle)",  (int)paramsDram.gettCCD_S());
+  std::printf(" %30s : %d\n", "tCCD_L (cycle)",  (int)paramsDram.gettCCD_L());
 }
 
 //! @brief  Show data copy stats
 void
 pimStatsMgr::showCopyStats() const
 {
+  std::printf("----------------------------------------\n");
   std::printf("Data Copy Stats:\n");
   uint64_t bytesCopiedMainToDevice = m_bitsCopiedMainToDevice / 8;
   uint64_t bytesCopiedDeviceToMain = m_bitsCopiedDeviceToMain / 8;
