@@ -26,6 +26,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
   double msCompute = 0.0;
   unsigned numPass = obj.getMaxNumRegionsPerCore();
   unsigned bitsPerElement = obj.getBitsPerElement(PimBitWidth::ACTUAL);
+  uint64_t totalAct = 0;
+  uint64_t totalPre = 0;
+  uint64_t totalCAS = 0;
   uint64_t totalOp = 0;
   if (cmdType == PimCmdEnum::CONVERT_TYPE) {
     // for type conversion, ALU parallelism is determined by the wider data type
@@ -54,6 +57,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += ((m_eR_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks) + (m_eR_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += ((m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks) + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
+      totalAct = 2 * numPass;
+      totalPre = 2 * numPass;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2;
       break;
     }
     case PimCmdEnum::POPCOUNT:
@@ -80,6 +86,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
+      totalAct = 2 * numPass;
+      totalPre = 2 * numPass; 
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2;
       break;
     }
     case PimCmdEnum::ADD_SCALAR:
@@ -97,6 +106,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
+      totalAct = 2 * numPass + 1; // extra activate for scalar
+      totalPre = 2 * numPass + 1; // extra precharge for scalar
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2 + 1; // extra read for scalar
       break;
     }
     case PimCmdEnum::AND_SCALAR:
@@ -120,6 +132,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
+      totalAct = 2 * numPass + 1;
+      totalPre = 2 * numPass + 1;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2 + 1; // extra read for scalar
       break;
     }
     case PimCmdEnum::SHIFT_BITS_L:
@@ -135,6 +150,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
+      totalAct = 2 * numPass;
+      totalPre = 2 * numPass;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2;
       break;
     }
     case PimCmdEnum::AES_SBOX:
@@ -168,7 +186,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       break;
   }
 
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp);
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, totalAct, totalPre, totalCAS, totalOp);
 }
 
 //! @brief  Perf energy model of bank-level PIM for func2
@@ -183,7 +201,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
   unsigned numPass = obj.getMaxNumRegionsPerCore();
   unsigned bitsPerElement = obj.getBitsPerElement(PimBitWidth::ACTUAL);
   unsigned numCoresUsed = obj.isLoadBalanced() ? obj.getNumCoreAvailable() : obj.getNumCoresUsed();
-
+  uint64_t totalAct = 0;
+  uint64_t totalPre = 0;
+  uint64_t totalCAS = 0;
   unsigned maxElementsPerRegion = obj.getMaxElementsPerRegion();
   double numberOfOperationPerElement = ((double)bitsPerElement / m_blimpCoreBitWidth);
   unsigned minElementPerRegion = obj.isLoadBalanced() ? (std::ceil(obj.getNumElements() * 1.0 / numCoresUsed) - (maxElementsPerRegion * (numPass - 1))) : maxElementsPerRegion;
@@ -201,6 +221,9 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
     case PimCmdEnum::MUL:
     case PimCmdEnum::DIV:
     {
+      totalAct = 3 * numPass;
+      totalPre = 3 * numPass;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3; // 2 CAS per GDL iteration (1 read, 1 write)
       msRead = ((2 * (m_tACT + m_tPRE)) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((2 * (activateMS + m_tPRE)) + (minGDLItr * m_tGDL));
       msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL));
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
@@ -229,6 +252,10 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
        *
        * As a result, only one read operation is necessary for the entire pass.
       */
+
+      totalAct = 3 * numPass + 1; // extra activate for the first read of the first multiply
+      totalPre = 3 * numPass + 1; // extra precharge for the first read of the first multiply
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3; // 2 CAS per GDL iteration (1 read, 1 write)
       msRead = ((m_tACT + m_tPRE) * 2) * (numPass - 1) + (m_tR + m_tGDL) + (activateMS + m_tPRE);
       msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL));
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * 2 * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement * 2);
@@ -255,6 +282,10 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
     case PimCmdEnum::COND_SELECT:
     case PimCmdEnum::COND_SELECT_SCALAR:
     {
+
+      totalAct = 3 * numPass;
+      totalPre = 3 * numPass;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3; // 2 CAS per GDL iteration (1 read, 1 write)
       msRead = ((2 * (m_tACT + m_tPRE)) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((2 * (activateMS + m_tPRE)) + (minGDLItr * m_tGDL));
       msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL));
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
@@ -271,7 +302,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
       printf("PIM-Warning: Perf energy model not available for PIM command %s\n", pimCmd::getName(cmdType, "").c_str());
       break;
   }
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp);
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, totalAct, totalPre, totalCAS, totalOp);
 }
 
 //! @brief  Perf energy model of bank-level PIM for reduction sum
@@ -325,7 +356,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForReduction(PimCmdEnum cmdType, const pimO
       break;
     }
 
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp);
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, numPass, numPass, (minGDLItr + maxGDLItr * numPass), (minGDLItr + maxGDLItr * numPass));
 }
 
 //! @brief  Perf energy model of bank-level PIM for broadcast
@@ -354,7 +385,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForBroadcast(PimCmdEnum cmdType, const pimO
   mjEnergy = (m_eACT + m_ePRE) * numPass * numCore;
   mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) + m_eW_L * minGDLItr) * numBankPerChip;
   mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp);
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, numPass, numPass, (minGDLItr + maxGDLItr * numPass), (minGDLItr + maxGDLItr * numPass));
 }
 
 // TODO: This needs to be revisited
