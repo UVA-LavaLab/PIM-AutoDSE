@@ -144,6 +144,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
     }
     case PimCmdEnum::SHIFT_BITS_L:
     case PimCmdEnum::SHIFT_BITS_R:
+    case PimCmdEnum::NOT:
     {
       msRead = (m_tACT + m_tPRE) * (numPass - 1) + (activateMS + m_tPRE);
       msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1)) + (activateMS + m_tPRE + (minGDLItr * m_tGDL));
