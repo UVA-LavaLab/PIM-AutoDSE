@@ -21,7 +21,10 @@ class pimPerfEnergyBankLevel : public pimPerfEnergyBase
 public:
   pimPerfEnergyBankLevel(const pimPerfEnergyModelParams& params) : pimPerfEnergyBase(params) {
     auto cfg = params.getArchSpecificConfig<pimeval::BankLevelConfig>();
-    m_blimpRegisterCount = cfg->blimpRegisterCount;
+    if (cfg) {
+      m_blimpRegisterCount = cfg->blimpRegisterCount;
+      m_blimpRegisterBitWidth = cfg->blimpRegisterBitWidth == 0 ? m_GDLWidth : cfg->blimpRegisterBitWidth;
+    }
   }
   virtual ~pimPerfEnergyBankLevel() {}
 
@@ -41,6 +44,7 @@ protected:
   double m_blimpArithmeticEnergy = 0.0000000004992329586 * m_simdUnitCount; // mJ
   double m_blimpLogicalEnergy = 0.0000000001467846411 * m_simdUnitCount; // mJ
   unsigned m_blimpRegisterCount = 3; // Number of registers in BLIMP core
+  unsigned m_blimpRegisterBitWidth = m_GDLWidth; // Bit width of each BLIMP register, 0 means use GDL width as default
 private:
   void simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph, std::vector<pimeval::perfEnergy> &perfEnergies) const;
 };
