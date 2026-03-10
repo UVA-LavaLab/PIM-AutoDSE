@@ -955,14 +955,14 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
     // Process each pass (row) individually
     for (const auto& [passId, eventsInPass] : passEvents) {
       // Separate by type
-      std::vector<pimeval::EventNode*> readActivatesByPass;
-      std::vector<pimeval::EventNode*> writeActivatesByPass;
-      std::vector<pimeval::EventNode*> readPrechargesByPass;
-      std::vector<pimeval::EventNode*> writePrechargesByPass;
-      std::unordered_map<unsigned, pimeval::EventNode*> read1ByChunk;
-      std::unordered_map<unsigned, pimeval::EventNode*> read2ByChunk;
-      std::unordered_map<unsigned, pimeval::EventNode*> computeByChunk;
-      std::unordered_map<unsigned, pimeval::EventNode*> writeByChunk;
+      std::map<unsigned, std::vector<pimeval::EventNode*>> readActivatesByPass;
+      std::map<unsigned, std::vector<pimeval::EventNode*>> writeActivatesByPass;
+      std::map<unsigned, std::vector<pimeval::EventNode*>> readPrechargesByPass;
+      std::map<unsigned, std::vector<pimeval::EventNode*>> writePrechargesByPass;
+      std::map<unsigned, pimeval::EventNode*> read1ByChunk;
+      std::map<unsigned, pimeval::EventNode*> read2ByChunk;
+      std::map<unsigned, pimeval::EventNode*> computeByChunk;
+      std::map<unsigned, pimeval::EventNode*> writeByChunk;
       bool readScalar = false;
       pimeval::EventNode* readScalarEvent = nullptr;
       unsigned maxChunkId = 0;
@@ -971,16 +971,16 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
         maxChunkId = std::max(maxChunkId, ev->chunkID);
         switch (ev->type) {
           case pimeval::EventType::ACTIVATE_READ:
-            readActivatesByPass.push_back(ev);
+            readActivatesByPass[ev->chunkID].push_back(ev);
             break;
           case pimeval::EventType::ACTIVATE_WRITE:
-            writeActivatesByPass.push_back(ev);
+            writeActivatesByPass[ev->chunkID].push_back(ev);
             break;
           case pimeval::EventType::PRECHARGE_READ:
-            readPrechargesByPass.push_back(ev);
+            readPrechargesByPass[ev->chunkID].push_back(ev);
             break;
           case pimeval::EventType::PRECHARGE_WRITE:
-            writePrechargesByPass.push_back(ev);
+            writePrechargesByPass[ev->chunkID].push_back(ev);
             break;
           case pimeval::EventType::READ_SRC1:
             read1ByChunk[ev->chunkID] = ev;
@@ -1004,59 +1004,160 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
       }
       pimeval::EventNode* lastPrecharge = nullptr;
       if (readScalar) {
-        readActivatesByPass[0]->consumers.push_back(readScalarEvent);
-        readScalarEvent->producers.push_back(readActivatesByPass[0]);
-        readActivatesByPass[0]->consumers.push_back(readPrechargesByPass[0]);
-        readPrechargesByPass[0]->producers.push_back(readActivatesByPass[0]);
-        readActivatesByPass.erase(readActivatesByPass.begin());
-        lastPrecharge = readPrechargesByPass[0];
-        readPrechargesByPass[0]->producers.push_back(readScalarEvent);
-        readScalarEvent->consumers.push_back(readPrechargesByPass[0]);
-        readPrechargesByPass.erase(readPrechargesByPass.begin());
-      }
-      if (!read1ByChunk.empty()) {
-        readActivatesByPass[0]->consumers.push_back(read1ByChunk[0]);
-        read1ByChunk[0]->producers.push_back(readActivatesByPass[0]);
-        readActivatesByPass[0]->consumers.push_back(readPrechargesByPass[0]);
-        readPrechargesByPass[0]->producers.push_back(readActivatesByPass[0]);
-        readActivatesByPass.erase(readActivatesByPass.begin());
-        lastPrecharge = readPrechargesByPass[0];
-        readPrechargesByPass[0]->producers.push_back(read1ByChunk[maxChunkId]);
-        read1ByChunk[maxChunkId]->consumers.push_back(readPrechargesByPass[0]);
-        readPrechargesByPass.erase(readPrechargesByPass.begin());
-      }
-      
-      if (!read2ByChunk.empty()) {
-        if (lastPrecharge) {
-          lastPrecharge->consumers.push_back(readActivatesByPass[0]);
-          readActivatesByPass[0]->producers.push_back(lastPrecharge);
+        if (!readActivatesByPass[0].empty() && !readPrechargesByPass.empty() && !readPrechargesByPass.begin()->second.empty()) {
+          auto* activate = readActivatesByPass[0][0];
+          auto* precharge = readPrechargesByPass.begin()->second[0];
+
+          activate->consumers.push_back(readScalarEvent);
+          readScalarEvent->producers.push_back(activate);
+
+          activate->consumers.push_back(precharge);
+          precharge->producers.push_back(activate);
+
+          readActivatesByPass[0].erase(readActivatesByPass[0].begin());
+          if (readActivatesByPass[0].empty()) {
+            readActivatesByPass.erase(0);
+          }
+
+          lastPrecharge = precharge;
+
+          precharge->producers.push_back(readScalarEvent);
+          readScalarEvent->consumers.push_back(precharge);
+
+          readPrechargesByPass.begin()->second.erase(readPrechargesByPass.begin()->second.begin());
+          if (readPrechargesByPass.begin()->second.empty()) {
+            readPrechargesByPass.erase(readPrechargesByPass.begin());
+          }
         }
-        readActivatesByPass[0]->consumers.push_back(read2ByChunk[0]);
-        read2ByChunk[0]->producers.push_back(readActivatesByPass[0]);
-        readActivatesByPass[0]->consumers.push_back(readPrechargesByPass[0]);
-        readPrechargesByPass[0]->producers.push_back(readActivatesByPass[0]);
-        readActivatesByPass.erase(readActivatesByPass.begin());
-        lastPrecharge = readPrechargesByPass[0];
-        readPrechargesByPass[0]->producers.push_back(read2ByChunk[maxChunkId]);
-        read2ByChunk[maxChunkId]->consumers.push_back(readPrechargesByPass[0]);
-        readPrechargesByPass.erase(readPrechargesByPass.begin());
       }
-      
-      if (!writeByChunk.empty()) {
-        if (lastPrecharge) {
-          lastPrecharge->consumers.push_back(writeActivatesByPass[0]);
-          writeActivatesByPass[0]->producers.push_back(lastPrecharge);
-        }
-        writeActivatesByPass[0]->consumers.push_back(writeByChunk[0]);
-        writeByChunk[0]->producers.push_back(writeActivatesByPass[0]);
-        writeActivatesByPass[0]->consumers.push_back(writePrechargesByPass[0]);
-        writePrechargesByPass[0]->producers.push_back(writeActivatesByPass[0]);
-        writeActivatesByPass.erase(writeActivatesByPass.begin());
-        writePrechargesByPass[0]->producers.push_back(writeByChunk[maxChunkId]);
-        writeByChunk[maxChunkId]->consumers.push_back(writePrechargesByPass[0]);
-        writePrechargesByPass.erase(writePrechargesByPass.begin());
-      }
+
       for (unsigned c = 0; c <= maxChunkId; ++c) {
+        // ----------- READ 1 ------------
+        if (readActivatesByPass.count(c) && read1ByChunk.count(c)) {
+          if (!readActivatesByPass[c].empty() && !readPrechargesByPass.empty() && !readPrechargesByPass.begin()->second.empty()) {
+            auto* activate = readActivatesByPass[c][0];
+            auto* precharge = readPrechargesByPass.begin()->second[0];
+            auto* read = read1ByChunk[c];
+            unsigned prechargeChunkId = precharge->chunkID;
+
+            if (lastPrecharge) {
+              // if (lastPrecharge->type == pimeval::EventType::PRECHARGE_WRITE) {
+              //   printf("EventID: %lu, Type: %s is a producer of EventID: %lu, Type: %s\n", lastPrecharge->eventID, toString(lastPrecharge->type).c_str(), activate->eventID, toString(activate->type).c_str());
+              // }
+              lastPrecharge->consumers.push_back(activate);
+              activate->producers.push_back(lastPrecharge);
+            }
+
+            activate->consumers.push_back(read);
+            read->producers.push_back(activate);
+
+            activate->consumers.push_back(precharge);
+            precharge->producers.push_back(activate);
+            if (read1ByChunk.count(prechargeChunkId)) {
+              precharge->producers.push_back(read1ByChunk[prechargeChunkId]);
+              read1ByChunk[prechargeChunkId]->consumers.push_back(precharge);
+            }
+
+            lastPrecharge = precharge;
+
+            readActivatesByPass[c].erase(readActivatesByPass[c].begin());
+            if (readActivatesByPass[c].empty()) {
+              readActivatesByPass.erase(c);
+            }
+
+            readPrechargesByPass.begin()->second.erase(readPrechargesByPass.begin()->second.begin());
+            if (readPrechargesByPass.begin()->second.empty()) {
+              readPrechargesByPass.erase(readPrechargesByPass.begin());
+            }
+          }
+        }
+
+        // ----------- READ 2 ------------
+        if (readActivatesByPass.count(c) && read2ByChunk.count(c)) {
+          if (!readActivatesByPass[c].empty() && !readPrechargesByPass.empty() && !readPrechargesByPass.begin()->second.empty()) {
+            auto* activate = readActivatesByPass[c][0];
+            auto* precharge = readPrechargesByPass.begin()->second[0];
+            auto* read = read2ByChunk[c];
+            unsigned prechargeChunkId = precharge->chunkID;
+            // if (c > 0) {
+            //    printf("Activate: [ %s] | Read2:[ %s]\n", formatEvent(activate).c_str(), formatEvent(read).c_str());
+            // }
+
+            if (lastPrecharge) {
+              lastPrecharge->consumers.push_back(activate);
+              activate->producers.push_back(lastPrecharge);
+            }
+
+            activate->consumers.push_back(read);
+            read->producers.push_back(activate);
+            // if (c > 0) {
+            //   //  printf("Activate: [ %s] | Read2:[ %s]\n", formatEvent(activate).c_str(), formatEvent(read).c_str());
+            //   printf("Producers of Read2: %s\n", formatEvent(read).c_str());
+            //   for (auto* p : read->producers) {
+            //     if (p) printf("\n%s ", formatEvent(p).c_str());
+            //   }
+            //   printf("\n");
+            // }
+
+            activate->consumers.push_back(precharge);
+            precharge->producers.push_back(activate);
+            if (read2ByChunk.count(prechargeChunkId)) {
+              precharge->producers.push_back(read2ByChunk[prechargeChunkId]);
+              read2ByChunk[prechargeChunkId]->consumers.push_back(precharge);
+            }
+
+            lastPrecharge = precharge;
+
+            readActivatesByPass[c].erase(readActivatesByPass[c].begin());
+            if (readActivatesByPass[c].empty()) {
+              readActivatesByPass.erase(c);
+            }
+
+            readPrechargesByPass.begin()->second.erase(readPrechargesByPass.begin()->second.begin());
+            if (readPrechargesByPass.begin()->second.empty()) {
+              readPrechargesByPass.erase(readPrechargesByPass.begin());
+            }
+          }
+        }
+
+        // ----------- WRITE ------------
+        if (writeActivatesByPass.count(c) && writeByChunk.count(c)) {
+          if (!writeActivatesByPass[c].empty() && !writePrechargesByPass.empty() && !writePrechargesByPass.begin()->second.empty()) {
+            auto* activate = writeActivatesByPass[c][0];
+            auto* precharge = writePrechargesByPass.begin()->second[0];
+            auto* write = writeByChunk[c];
+            unsigned prechargeChunkId = precharge->chunkID;
+
+            if (lastPrecharge) {
+              lastPrecharge->consumers.push_back(activate);
+              activate->producers.push_back(lastPrecharge);
+            }
+
+            activate->consumers.push_back(write);
+            write->producers.push_back(activate);
+
+            activate->consumers.push_back(precharge);
+            precharge->producers.push_back(activate);
+
+            if (writeByChunk.count(prechargeChunkId)) {
+              precharge->producers.push_back(writeByChunk[prechargeChunkId]);
+              writeByChunk[prechargeChunkId]->consumers.push_back(precharge);
+            }
+
+            lastPrecharge = precharge;
+
+            writeActivatesByPass[c].erase(writeActivatesByPass[c].begin());
+            if (writeActivatesByPass[c].empty()) {
+              writeActivatesByPass.erase(c);
+            }
+
+            writePrechargesByPass.begin()->second.erase(writePrechargesByPass.begin()->second.begin());
+            if (writePrechargesByPass.begin()->second.empty()) {
+              writePrechargesByPass.erase(writePrechargesByPass.begin());
+            }
+          }
+        }
+
         if (read1ByChunk.count(c) && computeByChunk.count(c)) {
           read1ByChunk[c]->consumers.push_back(computeByChunk[c]);
           computeByChunk[c]->producers.push_back(read1ByChunk[c]);
@@ -1085,6 +1186,7 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
             writeByChunk[c + 1]->producers.push_back(writeByChunk[c]);
           }
         }
+        // lastPrecharge = nullptr; // Reset for next chunk
       }
     }
   };
