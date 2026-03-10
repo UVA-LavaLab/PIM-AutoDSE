@@ -158,6 +158,7 @@ pimDevice::init()
   {
     auto bankLevelCfg = std::make_shared<pimeval::BankLevelConfig>();
     bankLevelCfg->blimpRegisterCount = m_config.getVectorRegisterCount() > 2 ? m_config.getVectorRegisterCount() : 3; // 3 BLIMP registers
+    bankLevelCfg->blimpRegisterBitWidth = m_config.getVectorRegisterBitWidth(); // 0 means use GDLWidth as default
     pimPerfEnergyModelParams params(PIM_DEVICE_BANK_LEVEL, getNumRanks(), paramsDram);
     params.setArchSpecificConfig(bankLevelCfg);
     m_perfEnergyModel = pimPerfEnergyFactory::createPerfEnergyModel(params);
