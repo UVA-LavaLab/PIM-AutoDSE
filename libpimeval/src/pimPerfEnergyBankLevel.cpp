@@ -44,22 +44,27 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
   unsigned maxGDLItr = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   unsigned minGDLItr = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   unsigned numBankPerChip = numCores / m_numChipsPerRank;
+  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterCount * m_blimpRegisterBitWidth));
+  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterCount * m_blimpRegisterBitWidth));
   double activateMS = minGDLItr * m_tGDL < m_tRAS * m_tCK ? m_tRAS * m_tCK : m_tACT; // Use tRAS if GDL is less than tRAS
-  // for scalar operations an extra read is required to read the scalar value
+  std::printf("PIM INFO: cmd=%s, numPass=%u, bitsPerElement=%u, numCoresUsed=%u, maxElementsPerRegion=%u, minElementsPerRegion=%u, maxGDLItr=%u, minGDLItr=%u, numMaxActPre=%u, numMinActPre=%u\n",
+              pimCmd::getName(cmdType, "").c_str(), numPass, bitsPerElement, numCores, maxElementsPerRegion, minElementPerRegion, maxGDLItr, minGDLItr, numMaxActPre, numMinActPre);
+  
+  //for scalar operations an extra read is required to read the scalar value
   switch (cmdType)
   {
     case PimCmdEnum::COPY_O2O:
     {
-      msRead = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1)) + (activateMS + m_tPRE + (minGDLItr * m_tGDL));
-      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1)) + (activateMS + m_tPRE + (minGDLItr * m_tGDL));
+      msRead = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1) * numMaxActPre) + (activateMS + m_tPRE + (minGDLItr * m_tGDL)) * numMinActPre;
+      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1) * numMaxActPre) + (activateMS + m_tPRE + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = 0;
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = numPass * numCores * (m_eACT + m_ePRE) * 2;
       mjEnergy += ((m_eR_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks) + (m_eR_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += ((m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks) + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
-      totalAct = 2 * numPass;
-      totalPre = 2 * numPass;
+      totalAct = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre;
+      totalPre = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre;
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2;
       totalL = 0;
       break;
@@ -78,8 +83,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
         // numberOfOperationPerElement *= 5; // 2 shifts, 1 not, 1 and, 1 or
       }
       // Refer to fulcrum documentation
-      msRead = (m_tACT + m_tPRE) * (numPass - 1) + (activateMS + m_tPRE);
-      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1)) + (activateMS + m_tPRE + (minGDLItr * m_tGDL));
+      msRead = (m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre + (activateMS + m_tPRE) * numMinActPre;
+      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1) * numMaxActPre) + (activateMS + m_tPRE + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = ((m_eACT + m_ePRE) * 2 + (maxElementsPerRegion * m_blimpArithmeticEnergy * numberOfOperationPerElement)) * numCores * (numPass - 1);
@@ -88,8 +93,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
-      totalAct = 2 * numPass;
-      totalPre = 2 * numPass; 
+      totalAct = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre;
+      totalPre = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre; 
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2;
       totalL = (maxGDLItr * (numPass - 1) + minGDLItr);
       break;
@@ -99,8 +104,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
     case PimCmdEnum::MUL_SCALAR:
     case PimCmdEnum::DIV_SCALAR:
     {
-      msRead = (m_tACT + m_tPRE) * (numPass - 1) + (activateMS + m_tPRE) + m_tR + m_tGDL;
-      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1)) + (activateMS + m_tPRE + (minGDLItr * m_tGDL));
+      msRead = (m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre + (activateMS + m_tPRE) * numMinActPre + m_tR + m_tGDL;
+      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1) * numMaxActPre) + (activateMS + m_tPRE + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = ((m_eACT + m_ePRE) * 2 + (maxElementsPerRegion * m_blimpArithmeticEnergy * numberOfOperationPerElement)) * numCores * (numPass - 1);
@@ -109,8 +114,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
-      totalAct = 2 * numPass + 1; // extra activate for scalar
-      totalPre = 2 * numPass + 1; // extra precharge for scalar
+      totalAct = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre + 1; // extra activate for scalar
+      totalPre = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre + 1; // extra precharge for scalar
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2 + 1; // extra read for scalar
       totalL = (maxGDLItr * (numPass - 1) + minGDLItr); // extra load for scalar
       break;
@@ -126,8 +131,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
     case PimCmdEnum::MIN_SCALAR:
     case PimCmdEnum::MAX_SCALAR:
     {
-      msRead = (m_tACT + m_tPRE) * (numPass - 1) + m_tR + m_tGDL + activateMS + m_tPRE;
-      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1)) + (activateMS + m_tPRE + (minGDLItr * m_tGDL));
+      msRead = (m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre + (m_tR + m_tGDL + activateMS + m_tPRE) * numMinActPre;
+      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1) * numMaxActPre) + (activateMS + m_tPRE + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = (((m_eACT + m_ePRE) * 2) +  (maxElementsPerRegion * m_blimpLogicalEnergy * numberOfOperationPerElement)) * numCores * (numPass - 1);
@@ -136,8 +141,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
-      totalAct = 2 * numPass + 1;
-      totalPre = 2 * numPass + 1;
+      totalAct = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre + 1; // extra activate for scalar
+      totalPre = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre + 1; // extra precharge for scalar
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2 + 1; // extra read for scalar
       totalL = (maxGDLItr * (numPass - 1) + minGDLItr); // extra load for scalar
       break;
@@ -146,8 +151,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
     case PimCmdEnum::SHIFT_BITS_R:
     case PimCmdEnum::NOT:
     {
-      msRead = (m_tACT + m_tPRE) * (numPass - 1) + (activateMS + m_tPRE);
-      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1)) + (activateMS + m_tPRE + (minGDLItr * m_tGDL));
+      msRead = (m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre + (activateMS + m_tPRE) * numMinActPre;
+      msWrite = ((m_tACT + m_tPRE + maxGDLItr * m_tGDL) * (numPass - 1) * numMaxActPre) + (activateMS + m_tPRE + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = (((m_eACT + m_ePRE) * 2) +  (maxElementsPerRegion * m_blimpLogicalEnergy * numberOfOperationPerElement)) * numCores * (numPass - 1);
@@ -156,8 +161,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
-      totalAct = 2 * numPass;
-      totalPre = 2 * numPass;
+      totalAct = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre;
+      totalPre = 2 * (numPass - 1) * numMaxActPre + 2 * numMinActPre;
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2;
       totalL = (maxGDLItr * (numPass - 1) + minGDLItr);
       break;
@@ -220,8 +225,11 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
   unsigned minGDLItr = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   uint64_t totalOp = 0;
   unsigned numBankPerChip = numCoresUsed / m_numChipsPerRank;
+  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 * 2 / (m_blimpRegisterBitWidth * m_blimpRegisterCount));
+  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 * 2/ (m_blimpRegisterCount * m_blimpRegisterBitWidth));
   double activateMS = minGDLItr * m_tGDL < m_tRAS * m_tCK ? m_tRAS * m_tCK : m_tACT; // Use tRAS if GDL is less than tRAS
-
+  std::printf("PIM INFO: cmd=%s, numPass=%u, bitsPerElement=%u, numCoresUsed=%u, maxElementsPerRegion=%u, minElementsPerRegion=%u, maxGDLItr=%u, minGDLItr=%u, numMaxActPre=%u, numMinActPre=%u\n",
+              pimCmd::getName(cmdType, "").c_str(), numPass, bitsPerElement, numCoresUsed, maxElementsPerRegion, minElementPerRegion, maxGDLItr, minGDLItr, numMaxActPre, numMinActPre);
   switch (cmdType)
   {
     case PimCmdEnum::ADD:
@@ -229,12 +237,12 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
     case PimCmdEnum::MUL:
     case PimCmdEnum::DIV:
     {
-      totalAct = 3 * numPass;
-      totalPre = 3 * numPass;
+      totalAct = 3 * (numPass - 1) * numMaxActPre + 3 * numMinActPre; // 2 for source operands, 1 for destination
+      totalPre = 3 * (numPass - 1) * numMaxActPre + 3 * numMinActPre; // 2 for source operands, 1 for destination
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3; // 2 CAS per GDL iteration (1 read, 1 write)
       totalL = (maxGDLItr * (numPass - 1) + minGDLItr);
-      msRead = ((2 * (m_tACT + m_tPRE)) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((2 * (activateMS + m_tPRE)) + (minGDLItr * m_tGDL));
-      msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL));
+      msRead = ((2 * (m_tACT + m_tPRE)) + (maxGDLItr * m_tGDL)) * (numPass - 1) * numMaxActPre + ((2 * (activateMS + m_tPRE)) + (minGDLItr * m_tGDL)) * numMinActPre;
+      msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) * numMaxActPre + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = (((m_eACT + m_ePRE) * 3) + (maxElementsPerRegion * m_blimpArithmeticEnergy * numberOfOperationPerElement)) * numCoresUsed * (numPass - 1);
@@ -262,11 +270,11 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
        * As a result, only one read operation is necessary for the entire pass.
       */
 
-      totalAct = 3 * numPass + 1; // extra activate for the first read of the first multiply
-      totalPre = 3 * numPass + 1; // extra precharge for the first read of the first multiply
+      totalAct = 3 * (numPass - 1) * numMaxActPre + 3 * numMinActPre + 1; // extra activate for the first read of the first multiply
+      totalPre = 3 * (numPass - 1) * numMaxActPre + 3 * numMinActPre + 1; // extra precharge for the first read of the first multiply
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3; // 2 CAS per GDL iteration (1 read, 1 write)
-      msRead = ((m_tACT + m_tPRE) * 2) * (numPass - 1) + (m_tR + m_tGDL) + (activateMS + m_tPRE);
-      msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL));
+      msRead = ((m_tACT + m_tPRE) * 2) * (numPass - 1) * numMaxActPre + (m_tR + m_tGDL) + (activateMS + m_tPRE);
+      msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) * numMaxActPre + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * 2 * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement * 2);
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = (((m_eACT + m_ePRE) * 3) + (maxElementsPerRegion * m_blimpArithmeticEnergy * numberOfOperationPerElement * 2)) * numCoresUsed * (numPass - 1);
@@ -293,11 +301,11 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
     case PimCmdEnum::COND_SELECT_SCALAR:
     {
 
-      totalAct = 3 * numPass;
-      totalPre = 3 * numPass;
+      totalAct = 3 * (numPass - 1) * numMaxActPre + 3 * numMinActPre; // 2 for source operands, 1 for destination
+      totalPre = 3 * (numPass - 1) * numMaxActPre + 3 * numMinActPre; // 2 for source operands, 1 for destination
       totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3; // 2 CAS per GDL iteration (1 read, 1 write)
-      msRead = ((2 * (m_tACT + m_tPRE)) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((2 * (activateMS + m_tPRE)) + (minGDLItr * m_tGDL));
-      msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL));
+      msRead = ((2 * (m_tACT + m_tPRE)) + (maxGDLItr * m_tGDL)) * (numPass - 1) * numMaxActPre + ((2 * (activateMS + m_tPRE)) + (minGDLItr * m_tGDL)) * numMinActPre;
+      msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) * numMaxActPre + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL)) * numMinActPre;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement);
       msRuntime = msRead + msWrite + msCompute;
       mjEnergy = (((m_eACT + m_ePRE) * 3) + (maxElementsPerRegion * m_blimpLogicalEnergy * numberOfOperationPerElement)) * numCoresUsed * (numPass - 1);
@@ -306,7 +314,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
       mjEnergy += ((m_eW_L * maxGDLItr * (numPass-1)) + (m_eW_L * minGDLItr)) * numBankPerChip * m_numRanks;
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
-      totalL = (maxGDLItr * (numPass - 1) + minGDLItr) * 2;
+      totalL = (maxGDLItr * (numPass - 1) + minGDLItr);
       break;
     }
     default:
@@ -335,7 +343,17 @@ pimPerfEnergyBankLevel::getPerfEnergyForReduction(PimCmdEnum cmdType, const pimO
   unsigned minGDLItr = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   uint64_t totalOp = 0;
   unsigned numBankPerChip = numCore / m_numChipsPerRank;
+
+  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterBitWidth * m_blimpRegisterCount));
+  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterBitWidth * m_blimpRegisterCount));
   double activateMS = minGDLItr * m_tGDL < m_tRAS * m_tCK ? m_tRAS * m_tCK : m_tACT; // Use tRAS if GDL is less than tRAS
+  uint64_t totalAct = 0;
+  uint64_t totalPre = 0;
+  uint64_t totalCAS = 0;
+  uint64_t totalL = 0;
+  std::printf("PIM INFO: cmd=%s, numPass=%u, bitsPerElement=%u, numCoresUsed=%u, maxElementsPerRegion=%u, minElementsPerRegion=%u, maxGDLItr=%u, minGDLItr=%u, numMaxActPre=%u, numMinActPre=%u\n",
+              pimCmd::getName(cmdType, "").c_str(), numPass, bitsPerElement, numCore, maxElementsPerRegion, minElementPerRegion, maxGDLItr, minGDLItr, numMaxActPre, numMinActPre);
+  
   switch (cmdType) {
     case PimCmdEnum::REDSUM:
     case PimCmdEnum::REDSUM_RANGE:
@@ -346,7 +364,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForReduction(PimCmdEnum cmdType, const pimO
     {
       // How many iteration require to read / write max elements per region
       double numberOfOperationPerElement = ((double)bitsPerElement / m_blimpCoreBitWidth);
-      msRead = (m_tACT + m_tPRE) * (numPass - 1) + (activateMS + m_tPRE);
+      msRead = (m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre + (activateMS + m_tPRE) * numMinActPre;
       // reduction for all regions assuming 16 core AMD EPYC 9124
       double aggregateMs = static_cast<double>(obj.getNumCoresUsed()) / 2300000;
       msCompute = (maxElementsPerRegion * m_blimpLatency * numberOfOperationPerElement * (numPass - 1)) + (minElementPerRegion * m_blimpLatency * numberOfOperationPerElement) + aggregateMs;
@@ -359,15 +377,18 @@ pimPerfEnergyBankLevel::getPerfEnergyForReduction(PimCmdEnum cmdType, const pimO
       mjEnergy += ((m_eR_L * maxGDLItr * (numPass-1)) + (m_eR_L * minGDLItr)) * numBankPerChip;
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
-      
+      totalAct = (numPass - 1) * numMaxActPre + numMinActPre;
+      totalPre = (numPass - 1) * numMaxActPre + numMinActPre;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr);
+      totalL = (maxGDLItr * (numPass - 1) + minGDLItr);
       break;
     }
     default:
       printf("PIM-Warning: Unsupported reduction command for bank-level PIM: %s\n", pimCmd::getName(cmdType, "").c_str());
       break;
     }
-
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, numPass, numPass, (minGDLItr + maxGDLItr * numPass), (minGDLItr + maxGDLItr * numPass));
+  
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, totalAct, totalPre, totalCAS, totalL);
 }
 
 //! @brief  Perf energy model of bank-level PIM for broadcast
@@ -388,15 +409,23 @@ pimPerfEnergyBankLevel::getPerfEnergyForBroadcast(PimCmdEnum cmdType, const pimO
   unsigned maxGDLItr = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   unsigned minGDLItr = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   unsigned numBankPerChip = numCore / m_numChipsPerRank;
+  uint64_t totalAct = 0;
+  uint64_t totalPre = 0;
+  uint64_t totalCAS = 0;
+  uint64_t totalL = 0;
   double activateMS = minGDLItr * m_tGDL < m_tRAS * m_tCK ? m_tRAS * m_tCK : m_tACT; // Use tRAS if GDL is less than tRAS
   uint64_t totalOp = 0;
   msWrite = ((m_tACT + m_tPRE) + (maxGDLItr * m_tGDL)) * (numPass - 1) + ((activateMS + m_tPRE) + (minGDLItr * m_tGDL));
-
+  totalAct = numPass;
+  totalPre = numPass;
+  totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr);
+  printf("PIM INFO: cmd=%s, numPass=%u, bitsPerElement=%u, numCoresUsed=%u, maxElementsPerRegion=%u, minElementsPerRegion=%u, maxGDLItr=%u, minGDLItr=%u\n",
+              pimCmd::getName(cmdType, "").c_str(), numPass, bitsPerElement, numCore, maxElementsPerRegion, minElementPerRegion, maxGDLItr, minGDLItr);
   msRuntime = msRead + msWrite + msCompute;
   mjEnergy = (m_eACT + m_ePRE) * numPass * numCore;
   mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) + m_eW_L * minGDLItr) * numBankPerChip;
   mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, numPass, numPass, (minGDLItr + maxGDLItr * numPass), 0);
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, totalAct, totalPre, totalCAS, totalL);
 }
 
 // TODO: This needs to be revisited
@@ -1568,7 +1597,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
   auto broadcastShouldWriteBack = [&](const pimeval::cmdNode& node) -> bool {
     for (auto& c : node.consumers) {
       if (cmdGraph[c].cmdType == PimCmdEnum::COPY_D2H) {
-        return true; // If any consumer is a D2H copy, we should write back
+        return true;
       }
     }
     return false;
@@ -1577,7 +1606,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
   auto isAliveAfter = [&](const pimeval::cmdNode& node, size_t currCMD) -> bool {
     for (auto& c : node.consumers) {
       if (cmdGraph[c].cmdType == PimCmdEnum::COPY_D2H) {
-        return true; // If any consumer is a D2H copy, we should write back
+        return true;
       }
       if (find(cmdGraph[c].srcs.begin(), cmdGraph[c].srcs.end(), node.dests[0]) != cmdGraph[c].srcs.end() && c > currCMD) {
         return true;
@@ -1585,426 +1614,303 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
     }
     return false;
   };
-  
+
   std::vector<pimeval::perfEnergy> perfEnergies(cmdGraph.size(), pimeval::perfEnergy(0, 0, 0, 0, 0, 0, 0, 0, 0));
   std::unordered_map<PimObjId, bool> inVectorRegister;
   std::unordered_map<PimObjId, bool> inScalarRegister;
+  std::unordered_map<PimObjId, uint64_t> vectorFootprintBits;
   std::unordered_map<PimObjId, std::pair<size_t, uint64_t>> shouldWriteBack;
   std::list<PimObjId> regLRU;
-  unsigned usedReg = 0;
+  uint64_t usedVectorBits = 0;
 
   uint64_t totalGRFbits = m_blimpRegisterCount * m_blimpRegisterBitWidth;
-  // max allowable register bits per object should be what each operand of a 2 src 1 dest command can hold
-  // assuming one of the srcs is latched 
   bool has2Src1Dest = false;
-  unsigned mm = 0;
+  uint64_t maxObjBits = 0;
   unsigned bitsPerElement = 0;
 
   for (const auto& node : cmdGraph) {
     if (node.srcs.size() == 2 && node.dests.size() == 1) {
       has2Src1Dest = true;
-      mm = node.srcs[0]->getBitsPerElement(PimBitWidth::ACTUAL) * node.srcs[0]->getMaxElementsPerRegion();
+      maxObjBits = std::max<uint64_t>(maxObjBits,
+          static_cast<uint64_t>(node.srcs[0]->getBitsPerElement(PimBitWidth::ACTUAL)) * node.srcs[0]->getMaxElementsPerRegion());
       bitsPerElement = std::max(bitsPerElement, node.srcs[0]->getBitsPerElement(PimBitWidth::ACTUAL));
     } else if ((node.srcs.size() == 1 && node.dests.size() == 1) ||
                (node.cmdType == PimCmdEnum::BROADCAST)) {
-      mm = node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL) * node.dests[0]->getMaxElementsPerRegion();
+      maxObjBits = std::max<uint64_t>(maxObjBits,
+          static_cast<uint64_t>(node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL)) * node.dests[0]->getMaxElementsPerRegion());
       bitsPerElement = std::max(bitsPerElement, node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL));
     } else {
       for (const auto& src : node.srcs) {
         bitsPerElement = std::max(bitsPerElement, src->getBitsPerElement(PimBitWidth::ACTUAL));
-        mm = src->getBitsPerElement(PimBitWidth::ACTUAL) * src->getMaxElementsPerRegion();
+        maxObjBits = std::max<uint64_t>(maxObjBits,
+            static_cast<uint64_t>(src->getBitsPerElement(PimBitWidth::ACTUAL)) * src->getMaxElementsPerRegion());
       }
       for (const auto& dst : node.dests) {
         bitsPerElement = std::max(bitsPerElement, dst->getBitsPerElement(PimBitWidth::ACTUAL));
-        mm = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
+        maxObjBits = std::max<uint64_t>(maxObjBits,
+            static_cast<uint64_t>(dst->getBitsPerElement(PimBitWidth::ACTUAL)) * dst->getMaxElementsPerRegion());
       }
     }
   }
 
-  uint64_t maxBitsPerObj = has2Src1Dest ? totalGRFbits/2 : totalGRFbits;
-  maxBitsPerObj = std::min<uint64_t>(maxBitsPerObj, static_cast<uint64_t>(mm));
+  uint64_t maxBitsPerObj = has2Src1Dest ? totalGRFbits / 2 : totalGRFbits;
+  maxBitsPerObj = std::min<uint64_t>(maxBitsPerObj, maxObjBits);
   if (maxBitsPerObj < bitsPerElement) {
     printf("PIM-ERROR: Register is too small to hold the maximum bits per element.\n");
-    return perfEnergies; // Return empty vector if error
+    return perfEnergies;
   }
-  unsigned numRegPerObj = maxBitsPerObj / m_blimpRegisterBitWidth;
+
+  unsigned numRegPerObj = static_cast<unsigned>(
+      (maxBitsPerObj + m_blimpRegisterBitWidth - 1) / m_blimpRegisterBitWidth);
   printf("PIM-Info: Fusing %zu commands.\n", cmdGraph.size());
   printf("PIM-Info: Has2Src1Dest %d Total GRF bits: %lu, Max bits per object: %lu, Num registers per object: %u\n",
          has2Src1Dest, totalGRFbits, maxBitsPerObj, numRegPerObj);
 
+  auto getTrackedBits = [&](const pimObjInfo* obj) -> uint64_t {
+    return std::min<uint64_t>(
+        maxBitsPerObj,
+        static_cast<uint64_t>(obj->getBitsPerElement(PimBitWidth::ACTUAL)) * obj->getMaxElementsPerRegion());
+  };
+
+  auto touchVectorObject = [&](PimObjId objId) {
+    if (inVectorRegister.count(objId)) {
+      regLRU.remove(objId);
+      regLRU.push_back(objId);
+    }
+  };
+
+  auto removeVectorObject = [&](PimObjId objId) {
+    if (!inVectorRegister.count(objId)) {
+      return;
+    }
+    auto footprintIt = vectorFootprintBits.find(objId);
+    if (footprintIt != vectorFootprintBits.end()) {
+      usedVectorBits -= footprintIt->second;
+      vectorFootprintBits.erase(footprintIt);
+    }
+    inVectorRegister.erase(objId);
+    regLRU.remove(objId);
+  };
+
+  auto evictUntilFits = [&](uint64_t requiredBits,
+                            const std::unordered_set<PimObjId>& pinnedObjs,
+                            PimObjId requestObjId,
+                            size_t requestCmdId,
+                            const char* requestLabel) -> bool {
+    while (usedVectorBits + requiredBits > totalGRFbits) {
+      auto victimIt = std::find_if(regLRU.begin(), regLRU.end(), [&](PimObjId objId) {
+        return !pinnedObjs.count(objId);
+      });
+      if (victimIt == regLRU.end()) {
+        printf("PIM-Error: Cannot evict pinned object for %s=%d in cmdID=%zu. Not enough registers available.\n",
+               requestLabel, requestObjId, requestCmdId);
+        return false;
+      }
+      PimObjId victimId = *victimIt;
+      regLRU.erase(victimIt);
+      inVectorRegister.erase(victimId);
+      auto footprintIt = vectorFootprintBits.find(victimId);
+      if (footprintIt != vectorFootprintBits.end()) {
+        usedVectorBits -= footprintIt->second;
+        vectorFootprintBits.erase(footprintIt);
+      }
+      if (shouldWriteBack.count(victimId)) {
+        if (isAliveAfter(cmdGraph[shouldWriteBack[victimId].first], requestCmdId)) {
+          cmdGraph[shouldWriteBack[victimId].first].numWrite += shouldWriteBack[victimId].second;
+        }
+        shouldWriteBack.erase(victimId);
+      }
+    }
+    return true;
+  };
+
+  auto addVectorObject = [&](PimObjId objId,
+                             pimObjInfo* obj,
+                             const std::unordered_set<PimObjId>& pinnedObjs,
+                             size_t cmdId,
+                             const char* label) -> bool {
+    uint64_t trackedBits = getTrackedBits(obj);
+    if (!evictUntilFits(trackedBits, pinnedObjs, objId, cmdId, label)) {
+      return false;
+    }
+    usedVectorBits += trackedBits;
+    vectorFootprintBits[objId] = trackedBits;
+    inVectorRegister[objId] = true;
+    regLRU.push_back(objId);
+    return true;
+  };
+
   for (size_t cmdId = 0; cmdId < cmdGraph.size(); ++cmdId) {
-    // printf("PIM-Info: Processing command ID %zu, Type: %s, Available Registers: %d\n", 
-    //        cmdId, pimCmd::getName(cmdGraph[cmdId].cmdType, "").c_str(), m_blimpRegisterCount - usedReg);
-    // printf("LRU State: ");
-    // for (const auto& regId : regLRU) {
-    //   printf("%d ", regId);
-    // }
-    // printf("\n\n");
     auto& node = cmdGraph[cmdId];
     std::unordered_set<PimObjId> pinnedObjs;
 
     if (node.cmdType == PimCmdEnum::COPY_H2D) {
-      PimObjId did = node.dests[0]->getObjId();
-      if (inVectorRegister.count(did)) {
-        inVectorRegister.erase(did);
-        shouldWriteBack.erase(did);
-        regLRU.remove(did);
-        usedReg -= numRegPerObj;  // Decrease used register count
-      } else if (inScalarRegister.count(did)) {
-        inScalarRegister.erase(did);
-        shouldWriteBack.erase(did);
+      PimObjId dstId = node.dests[0]->getObjId();
+      if (inVectorRegister.count(dstId)) {
+        removeVectorObject(dstId);
+        shouldWriteBack.erase(dstId);
+      } else if (inScalarRegister.count(dstId)) {
+        inScalarRegister.erase(dstId);
+        shouldWriteBack.erase(dstId);
       }
       continue;
     }
 
     if (node.cmdType == PimCmdEnum::COPY_D2H) {
-      PimObjId sid = node.srcs[0]->getObjId();
-      if (shouldWriteBack.count(sid)) {
-        cmdGraph[shouldWriteBack[sid].first].numWrite += shouldWriteBack[sid].second;
-        shouldWriteBack.erase(sid);
+      PimObjId srcId = node.srcs[0]->getObjId();
+      if (shouldWriteBack.count(srcId)) {
+        cmdGraph[shouldWriteBack[srcId].first].numWrite += shouldWriteBack[srcId].second;
+        shouldWriteBack.erase(srcId);
       }
       continue;
     }
 
     if (node.cmdType == PimCmdEnum::BROADCAST) {
-      // This will be treated as writing to scalar register so no register management needed unless the broadcast value is being sent to host next
-      PimObjId dstId  = node.dests[0]->getObjId();
-      pinnedObjs.insert(dstId);
-      pimObjInfo* dst  = node.dests[0];
-      uint64_t bitsDst  = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
+      PimObjId dstId = node.dests[0]->getObjId();
+      pimObjInfo* dst = node.dests[0];
+      uint64_t bitsDst = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
       uint64_t numItr = std::ceil(static_cast<double>(bitsDst) / maxBitsPerObj);
       if (!inVectorRegister.count(dstId) && !inScalarRegister.count(dstId)) {
-        // don't touch vector register as broadcast is scalar
         inScalarRegister[dstId] = true;
-        if (broadcastShouldWriteBack(node)) shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
-        // printf("PIM-WRITEBACK: Setting shouldWriteBack for dstId=%d with numItr=%lu in cmdID=%zu\n", 
-        //        dstId, numItr, cmdId);
+        if (broadcastShouldWriteBack(node)) {
+          shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
+        }
       } else {
         if (inVectorRegister.count(dstId)) {
-          // remove from vector register if it exists there
-          inVectorRegister.erase(dstId);
+          removeVectorObject(dstId);
           inScalarRegister[dstId] = true;
-          regLRU.remove(dstId);
-          usedReg -= numRegPerObj;  // Decrease used register count
         }
-        if (broadcastShouldWriteBack(node)) shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
+        if (broadcastShouldWriteBack(node)) {
+          shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
+        }
       }
-    } else if (node.srcs.size() == 2 && node.dests.size() == 1) {
-    // Handle 2-src 1-dest pattern (e.g., Grfb = Bank ADD Grfa)
-      // std::printf("Found 2-operand command: %s\n", pimCmd::getName(node.cmdType, "").c_str());
+      continue;
+    }
+
+    if (node.srcs.size() == 2 && node.dests.size() == 1) {
       PimObjId srcId1 = node.srcs[0]->getObjId();
       PimObjId srcId2 = node.srcs[1]->getObjId();
-      PimObjId dstId  = node.dests[0]->getObjId();
+      PimObjId dstId = node.dests[0]->getObjId();
       pinnedObjs.insert(srcId1);
       pinnedObjs.insert(srcId2);
       pinnedObjs.insert(dstId);
 
       pimObjInfo* src1 = node.srcs[0];
-      // pimObjInfo* src2 = node.srcs[1];
-      pimObjInfo* dst  = node.dests[0];
-
+      pimObjInfo* dst = node.dests[0];
       uint64_t bitsSrc1 = src1->getBitsPerElement(PimBitWidth::ACTUAL) * src1->getMaxElementsPerRegion();
-      // uint64_t bitsSrc2 = src2->getBitsPerElement(PimBitWidth::ACTUAL) * src2->getMaxElementsPerRegion();
-      uint64_t bitsDst  = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
-
-      // Assume src1 and dst must fit in GRF
+      uint64_t bitsDst = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
       uint64_t bitsNeededInGRF = bitsSrc1 + bitsDst;
       uint64_t numItr = std::ceil(static_cast<double>(bitsNeededInGRF) / totalGRFbits);
 
-      // std::printf("Bits needed in GRF: %lu, Total GRF Bits: %lu\n", bitsNeededInGRF, totalGRFbits);
-
-      // std::printf("   bits: src1=%lu, src2=%lu, dst=%lu | passes=%lu\n", bitsSrc1, bitsSrc2, bitsDst, numItr);
-
-      // === src1 ===
       if (!inVectorRegister.count(srcId1) && !inScalarRegister.count(srcId1)) {
         node.numRead1 += numItr;
         if (!inVectorRegister.count(srcId2) && !inScalarRegister.count(srcId2)) {
-          if (usedReg + numRegPerObj == m_blimpRegisterCount) {
-            auto objID = regLRU.front();  // Evict the least recently used register
-            if(pinnedObjs.count(objID)) {
-              printf("PIM-Error: Cannot evict pinned object objID=%d for srcId1=%d in cmdID=%zu. Not enough registers available.\n", 
-                     objID, srcId1, cmdId);
-              return perfEnergies;  // Not enough registers available
-            }
-            regLRU.pop_front();
-            inVectorRegister.erase(objID);
-            // printf("PIM-EVICT: Evicting register objID=%d to make room for srcId=%d\n", objID, srcId1);
-            usedReg -= numRegPerObj;  // Decrease used register count
-            if (shouldWriteBack.count(objID)) {
-              // printf("PIM-WRITEBACK: Incrementing numWrite by %lu for objID=%d in cmdID=%zu\n", 
-              //       shouldWriteBack[objID].second, objID, shouldWriteBack[objID].first);
-              if (isAliveAfter(cmdGraph[shouldWriteBack[objID].first], cmdId)) {
-                cmdGraph[shouldWriteBack[objID].first].numWrite += shouldWriteBack[objID].second;
-              }
-              shouldWriteBack.erase(objID);
-            }
+          if (!addVectorObject(srcId1, src1, pinnedObjs, cmdId, "srcId1")) {
+            return perfEnergies;
           }
-          usedReg += numRegPerObj;  // Increase used register count
-          inVectorRegister[srcId1] = true;
-          regLRU.push_back(srcId1);
         }
       } else {
-        if (inVectorRegister.count(srcId1)) {
-          regLRU.remove(srcId1);
-          regLRU.push_back(srcId1);
-        }
+        touchVectorObject(srcId1);
       }
 
-      // === src2 (latched, but still requires row buffer access) ===
       if (!inVectorRegister.count(srcId2) && !inScalarRegister.count(srcId2)) {
-        node.numRead2 += numItr;  // Still requires READ even if not stored in register
-        // src2 is not stored in GRF → no inRegister/src2
+        node.numRead2 += numItr;
       } else {
-        if (inVectorRegister.count(srcId2)) {
-          regLRU.remove(srcId2);
-          regLRU.push_back(srcId2);
-        }
+        touchVectorObject(srcId2);
       }
 
-      // === dst ===
       if (!inVectorRegister.count(dstId)) {
-        // printf("PIM-Info: dstId=%d not in register, used register=%d checking for eviction...\n", dstId, usedReg);
         if (inScalarRegister.count(dstId)) {
-          // printf("PIM-Info: dstId=%d found in scalar register, promoting to vector register...\n", dstId);
           inScalarRegister.erase(dstId);
         }
-        if (usedReg + numRegPerObj > m_blimpRegisterCount) {
-          auto objID = regLRU.front();  // Evict the least recently used register
-          if (pinnedObjs.count(objID)) {
-            printf("PIM-Error: Cannot evict pinned object objID=%d for dstId=%d in cmdID=%zu. Not enough registers available.\n",
-                   objID, dstId, cmdId);
-            return perfEnergies;  // Not enough registers available
-          }
-          regLRU.pop_front();
-          inVectorRegister.erase(objID);
-          usedReg -= numRegPerObj;  // Decrease used register count
-          // printf("PIM-EVICT: Evicting register objID=%d to make room for dstId=%d\n", objID, dstId);
-          if (shouldWriteBack.count(objID)) {
-            // printf("PIM-WRITEBACK: Incrementing numWrite by %lu for objID=%d in cmdID=%zu\n", 
-            //        shouldWriteBack[objID].second, objID, shouldWriteBack[objID].first);
-            if (isAliveAfter(cmdGraph[shouldWriteBack[objID].first], cmdId)) {
-              cmdGraph[shouldWriteBack[objID].first].numWrite += shouldWriteBack[objID].second;
-            }
-            shouldWriteBack.erase(objID);
-          }
+        if (!addVectorObject(dstId, dst, pinnedObjs, cmdId, "dstId")) {
+          return perfEnergies;
         }
-        usedReg += numRegPerObj;  // Increase used register count
-        inVectorRegister[dstId] = true;
         shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
-        regLRU.push_back(dstId);
       } else {
-        regLRU.remove(dstId);
-        regLRU.push_back(dstId);
+        touchVectorObject(dstId);
         shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
       }
-    } else if (node.srcs.size() == 1 && node.dests.size() == 1) {
-      // Handle 1-src 1-dest pattern (e.g., Grf = Bank ADD Srf)
-      // std::printf("Found 1-operand command: %s\n", pimCmd::getName(node.cmdType, "").c_str());
+      continue;
+    }
 
+    if (node.srcs.size() == 1 && node.dests.size() == 1) {
       PimObjId srcId = node.srcs[0]->getObjId();
       PimObjId dstId = node.dests[0]->getObjId();
-
-      // pimObjInfo* src = node.srcs[0];
       pimObjInfo* dst = node.dests[0];
-
-      // One can be latched, other one needs to be in GRF
-      // uint64_t bitsSrc = src->getBitsPerElement(PimBitWidth::ACTUAL) * src->getMaxElementsPerRegion();
       uint64_t bitsDst = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
-
       uint64_t numItr = std::ceil(static_cast<double>(bitsDst) / maxBitsPerObj);
 
-      // std::printf("Bits needed in GRF: %lu, Total GRF Bits: %lu\n", bitsDst, maxBitsPerObj);
-      // std::printf("   bits: src=%lu, dst=%lu | passes=%lu\n", bitsSrc, bitsDst, numItr);
-
-      // === src ===
       if (!inVectorRegister.count(srcId) && !inScalarRegister.count(srcId)) {
         node.numRead1 += numItr;
       } else {
-        if (inVectorRegister.count(srcId)) {
-          regLRU.remove(srcId);
-          regLRU.push_back(srcId);
-        }
+        touchVectorObject(srcId);
       }
 
-      // === dst ===
       if (!inVectorRegister.count(dstId)) {
         if (inScalarRegister.count(dstId)) {
-          // printf("PIM-Info: dstId=%d found in scalar register, promoting to vector register...\n", dstId);
           inScalarRegister.erase(dstId);
         }
-        if (usedReg + numRegPerObj > m_blimpRegisterCount) {
-          auto objID = regLRU.front();  // Evict the least recently used register
-          if (pinnedObjs.count(objID)) {
-            printf("PIM-Error: Cannot evict pinned object objID=%d for destId=%d in cmdID=%zu. Not enough registers available.\n", 
-                    objID, dstId, cmdId);
-            return perfEnergies;  // Not enough registers available
-          }
-          regLRU.pop_front();
-          inVectorRegister.erase(objID);
-          usedReg -= numRegPerObj;  // Decrease used register count
-          // printf("PIM-EVICT: Evicting register objID=%d to make room for dstId=%d\n", objID, dstId);
-          if (shouldWriteBack.count(objID)) {
-            // printf("PIM-WRITEBACK: Incrementing numWrite by %lu for objID=%d in cmdID=%zu\n", 
-            //        shouldWriteBack[objID].second, objID, shouldWriteBack[objID].first);
-
-            if (isAliveAfter(cmdGraph[shouldWriteBack[objID].first], cmdId)) {
-              cmdGraph[shouldWriteBack[objID].first].numWrite += shouldWriteBack[objID].second;
-            }
-            shouldWriteBack.erase(objID);
-          }
+        if (!addVectorObject(dstId, dst, pinnedObjs, cmdId, "destId")) {
+          return perfEnergies;
         }
-        usedReg += numRegPerObj;  // Increase used register count
-        inVectorRegister[dstId] = true;
         shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
-        regLRU.push_back(dstId);
       } else {
-        regLRU.remove(dstId);
-        regLRU.push_back(dstId);
+        touchVectorObject(dstId);
         shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
       }
-    } else if (node.srcs.size() == 2 && node.dests.empty()) {
-      // Handle 1-src no-dest pattern (e.g., Grf = Bank READ)
-      // std::printf("Found 1-src no-dest command: %s\n", pimCmd::getName(node.cmdType, "").c_str());
+      continue;
+    }
+
+    if (node.srcs.size() == 2 && node.dests.empty()) {
       PimObjId srcId1 = node.srcs[0]->getObjId();
       PimObjId srcId2 = node.srcs[1]->getObjId();
       pinnedObjs.insert(srcId1);
       pinnedObjs.insert(srcId2);
 
       pimObjInfo* src1 = node.srcs[0];
-      // pimObjInfo* src2 = node.srcs[1];
-
       uint64_t bitsSrc1 = src1->getBitsPerElement(PimBitWidth::ACTUAL) * src1->getMaxElementsPerRegion();
+      uint64_t numItr = std::ceil(static_cast<double>(bitsSrc1) / totalGRFbits);
 
-      // Assume src1 and dst must fit in GRF
-      uint64_t bitsNeededInGRF = bitsSrc1;
-      uint64_t numItr = std::ceil(static_cast<double>(bitsNeededInGRF) / totalGRFbits);
-
-      // std::printf("Bits needed in GRF: %lu, Total GRF Bits: %lu\n", bitsNeededInGRF, totalGRFbits);
-
-      // std::printf("   bits: src1=%lu, src2=%lu, dst=%lu | passes=%lu\n", bitsSrc1, bitsSrc2, bitsDst, numItr);
-
-      // === src1 ===
       if (!inVectorRegister.count(srcId1) && !inScalarRegister.count(srcId1)) {
         node.numRead1 += numItr;
         if (!inVectorRegister.count(srcId2) && !inScalarRegister.count(srcId2)) {
-          if (usedReg + numRegPerObj == m_blimpRegisterCount) {
-            auto objID = regLRU.front();  // Evict the least recently used register
-            if(pinnedObjs.count(objID)) {
-              printf("PIM-Error: Cannot evict pinned object objID=%d for srcId1=%d in cmdID=%zu. Not enough registers available.\n", 
-                     objID, srcId1, cmdId);
-              return perfEnergies;  // Not enough registers available
-            }
-            regLRU.pop_front();
-            inVectorRegister.erase(objID);
-            // printf("PIM-EVICT: Evicting register objID=%d to make room for srcId=%d\n", objID, srcId1);
-            usedReg -= numRegPerObj;  // Decrease used register count
-            if (shouldWriteBack.count(objID)) {
-              // printf("PIM-WRITEBACK: Incrementing numWrite by %lu for objID=%d in cmdID=%zu\n", 
-              //       shouldWriteBack[objID].second, objID, shouldWriteBack[objID].first);
-              if (isAliveAfter(cmdGraph[shouldWriteBack[objID].first], cmdId)) {
-                cmdGraph[shouldWriteBack[objID].first].numWrite += shouldWriteBack[objID].second;
-              }
-              shouldWriteBack.erase(objID);
-            }
+          if (!addVectorObject(srcId1, src1, pinnedObjs, cmdId, "srcId1")) {
+            return perfEnergies;
           }
-          usedReg += numRegPerObj;  // Increase used register count
-          inVectorRegister[srcId1] = true;
-          regLRU.push_back(srcId1);
         }
       } else {
-        if (inVectorRegister.count(srcId1)) {
-          regLRU.remove(srcId1);
-          regLRU.push_back(srcId1);
-        }
+        touchVectorObject(srcId1);
       }
 
-      // === src2 (latched, but still requires row buffer access) ===
       if (!inVectorRegister.count(srcId2) && !inScalarRegister.count(srcId2)) {
-        node.numRead2 += numItr;  // Still requires READ even if not stored in register
-        // src2 is not stored in GRF → no inRegister/src2
+        node.numRead2 += numItr;
       } else {
-        if (inVectorRegister.count(srcId1)) {
-          regLRU.remove(srcId1);
-          regLRU.push_back(srcId1);
-        }
+        touchVectorObject(srcId2);
       }
     }
-    // TODO: Add similar logic for 1-src 1-dest pattern if needed
   }
 
-  // Flush any remaining registers that need write-back
   for (auto it = regLRU.begin(); it != regLRU.end();) {
     PimObjId id = *it;
     if (shouldWriteBack.count(id)) {
-      bool shouldWriteBackFlag = false;
+      bool hasD2HConsumer = false;
       for (auto& c : cmdGraph[shouldWriteBack[id].first].consumers) {
         if (cmdGraph[c].cmdType == PimCmdEnum::COPY_D2H) {
-          cmdGraph[shouldWriteBack[id].first].numWrite += shouldWriteBack[id].second; // Count write for this command
-          shouldWriteBack.erase(id);
-          shouldWriteBackFlag = true;
+          cmdGraph[shouldWriteBack[id].first].numWrite += shouldWriteBack[id].second;
+          hasD2HConsumer = true;
           break;
         }
       }
-      if (!shouldWriteBackFlag) {
-        shouldWriteBack.erase(id);
-      }
+      shouldWriteBack.erase(id);
+      (void)hasD2HConsumer;
     }
     inVectorRegister.erase(id);
+    vectorFootprintBits.erase(id);
     it = regLRU.erase(it);
   }
 
-  //  if (m_debugCmds) {
-  // for (const auto& node : cmdGraph) {
-  //   printf("Cmd ID %zu (%s):\n", node.cmdId, pimCmd::getName(node.cmdType, "").c_str());
-  //   printf("  Srcs: ");
-  //   for (const auto& src : node.srcs) {
-  //     printf("%d ", src->getObjId());
-  //   }
-  //   printf("\n");
-  //   printf("  Dest: ");
-  //   if (!node.dests.empty()) printf("%d", node.dests[0]->getObjId());
-  //   printf("\n");
-
-  //   printf("  Producers: ");
-  //   for (const auto& pid : node.producers) {
-  //     printf("%zu ", pid);
-  //   }
-  //   printf("\n");
-  //   printf("  Consumers: ");
-  //   for (const auto& cid : node.consumers) {
-  //     printf("%zu ", cid);
-  //   }
-  //   printf("\n");
-  //   printf("  Num Read Src1: %u, Num Read Src2: %u, Num Write: %u\n", node.numRead1, node.numRead2, node.numWrite);
-  //   printf("\n\n");
-  // }
-  // }
-  // printf("PIM-Info: Fusion Depth: %u\n", fusionDepth);
   printf("Starting simulation...\n");
-  // for (const auto& node : cmdGraph) {
-  //   printf("Cmd ID %zu (%s):\n", node.cmdId, pimCmd::getName(node.cmdType, "").c_str());
-  //   printf("  Srcs: ");
-  //   for (const auto& src : node.srcs) {
-  //     printf("%d ", src->getObjId());
-  //   }
-  //   printf("\n");
-  //   printf("  Dest: ");
-  //   if (!node.dests.empty()) printf("%d", node.dests[0]->getObjId());
-  //   printf("\n");
-
-  //   printf("  Producers: ");
-  //   for (const auto& pid : node.producers) {
-  //     printf("%zu ", pid);
-  //   }
-  //   printf("\n");
-  //   printf("  Consumers: ");
-  //   for (const auto& cid : node.consumers) {
-  //     printf("%zu ", cid);
-  //   }
-  //   printf("\n");
-  //   printf("  Num Read Src1: %u, Num Read Src2: %u, Num Write: %u\n", node.numRead1, node.numRead2, node.numWrite);
-  //   printf("\n\n");
-  // }
   simulateExecution(cmdGraph, perfEnergies);
 
   return perfEnergies;
