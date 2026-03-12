@@ -202,6 +202,12 @@ pimStatsMgr::resetStats()
   m_bitsCopiedMainToDevice = 0;
   m_bitsCopiedDeviceToMain = 0;
   m_bitsCopiedDeviceToDevice = 0;
+  m_elapsedTimeCopiedMainToDevice = 0.0;
+  m_elapsedTimeCopiedDeviceToMain = 0.0;
+  m_elapsedTimeCopiedDeviceToDevice = 0.0;
+  m_mJCopiedMainToDevice = 0.0;
+  m_mJCopiedDeviceToMain = 0.0;
+  m_mJCopiedDeviceToDevice = 0.0;
 }
 
 //! @brief  Record estimated runtime and energy of a PIM command
