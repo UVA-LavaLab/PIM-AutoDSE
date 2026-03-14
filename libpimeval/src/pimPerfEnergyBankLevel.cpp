@@ -1317,12 +1317,12 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
             cmdMap[node.cmdId].push_back(en);
             node.events[p][c].push_back(en);
             read1Ch += R1_stride;
-            if (node.srcs.size() == 2 && node.numRead2 > 0 && c == read2Ch) {
-              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::ACTIVATE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
-              cmdMap[node.cmdId].push_back(en);
-              node.events[p][c].push_back(en);
-              read2Ch += R2_stride;
-            }
+          }
+          if (node.srcs.size() == 2 && node.numRead2 > 0 && c == read2Ch) {
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::ACTIVATE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
+            cmdMap[node.cmdId].push_back(en);
+            node.events[p][c].push_back(en);
+            read2Ch += R2_stride;
           }
           if (!node.dests.empty() && node.numWrite > 0 && (c == totalChunks - 1 || c == writePCh)) {
             pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_WRITE, currEventId++, node.cmdId, c, p, bitsPerElement);
@@ -1335,15 +1335,16 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
             cmdMap[node.cmdId].push_back(en);
             node.events[p][c].push_back(en);
             read1PCh += R1_stride;
-            if (node.srcs.size() == 2 && node.numRead2 > 0 && (c == totalChunks - 1 || c == read2PCh)) {
-              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
-              cmdMap[node.cmdId].push_back(en);
-              node.events[p][c].push_back(en);
-              read2PCh += R2_stride;
-            }
+          }
+          if (node.srcs.size() == 2 && node.numRead2 > 0 && (c == totalChunks - 1 || c == read2PCh)) {
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
+            cmdMap[node.cmdId].push_back(en);
+            node.events[p][c].push_back(en);
+            read2PCh += R2_stride;
           }
           for (size_t s = 0; s < node.srcs.size(); ++s) {
-            if (node.numRead1 <= s) break;
+            if (node.numRead1 == 0 && s == 0) continue;
+            if (node.numRead2 == 0 && s == 1) continue;
             pimeval::EventNode* en = pimeval::generateEvent(s == 0 ? pimeval::EventType::READ_SRC1 : pimeval::EventType::READ_SRC2, currEventId++, node.cmdId, c, p, bitsPerElement);
             cmdMap[node.cmdId].push_back(en);
             node.events[p][c].push_back(en);
@@ -1909,6 +1910,31 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
     vectorFootprintBits.erase(id);
     it = regLRU.erase(it);
   }
+
+  // for (const auto& node : cmdGraph) {
+  //   printf("Cmd ID %zu (%s):\n", node.cmdId, pimCmd::getName(node.cmdType, "").c_str());
+  //   printf("  Srcs: ");
+  //   for (const auto& src : node.srcs) {
+  //     printf("%d ", src->getObjId());
+  //   }
+  //   printf("\n");
+  //   printf("  Dest: ");
+  //   if (!node.dests.empty()) printf("%d", node.dests[0]->getObjId());
+  //   printf("\n");
+
+  //   printf("  Producers: ");
+  //   for (const auto& pid : node.producers) {
+  //     printf("%zu ", pid);
+  //   }
+  //   printf("\n");
+  //   printf("  Consumers: ");
+  //   for (const auto& cid : node.consumers) {
+  //     printf("%zu ", cid);
+  //   }
+  //   printf("\n");
+  //   printf("  Num Read Src1: %u, Num Read Src2: %u, Num Write: %u\n", node.numRead1, node.numRead2, node.numWrite);
+  //   printf("\n\n");
+  // }
 
   printf("Starting simulation...\n");
   simulateExecution(cmdGraph, perfEnergies);
