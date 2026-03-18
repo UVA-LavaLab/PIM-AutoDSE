@@ -1345,9 +1345,11 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
           }
         }
 
-        // compute event
-        pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::COMPUTE_CHUNK, currEventId++, node.cmdId, 0, p, dataBitsPerElement);
-        cmdMap[node.cmdId].push_back(en); node.events[p][0].push_back(en);
+        // compute event - one per dest GDL chunk
+        for (uint64_t c = 0; c < dataTotalChunks; ++c) {
+          pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::COMPUTE_CHUNK, currEventId++, node.cmdId, c, p, dataBitsPerElement);
+          cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+        }
       }
     } else {
       for (uint64_t p = 0; p < numPass; ++p) {
