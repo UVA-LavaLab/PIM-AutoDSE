@@ -246,13 +246,28 @@ private:
       case PimCmdEnum::EQ:
       case PimCmdEnum::NE:
       case PimCmdEnum::SCALED_ADD:
-      case PimCmdEnum::COND_SELECT:
       {
           return pimeval::cmdNode {
           .cmdType = cmdType,
           .cmdId = idx,
           .dests = {objPtrs[2]},
           .srcs = {objPtrs[0], objPtrs[1]},
+          .producers = {},
+          .consumers = {},
+          .numRead1 = 0,
+          .numRead2 = 0,
+          .numWrite = 0,
+          .canPrefetch = false,
+          .events = {}
+        };
+      }
+      case PimCmdEnum::COND_SELECT:
+      {
+          return pimeval::cmdNode {
+          .cmdType = cmdType,
+          .cmdId = idx,
+          .dests = {objPtrs[3]},
+          .srcs = {objPtrs[0], objPtrs[1], objPtrs[2]},
           .producers = {},
           .consumers = {},
           .numRead1 = 0,

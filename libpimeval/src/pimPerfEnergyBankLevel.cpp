@@ -1281,6 +1281,74 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
       }
     } else if (node.cmdType == PimCmdEnum::COPY_H2D || node.cmdType == PimCmdEnum::COPY_D2H || node.cmdType == PimCmdEnum::COPY_D2D || node.cmdType == PimCmdEnum::COND_COPY) {
       continue;
+    } else if (node.cmdType == PimCmdEnum::COND_SELECT) {
+      // srcs = {condBool, src1, src2}, dests = {dest}
+      // condBool uses 1-bit element width; src1/src2/dest use data element width
+      uint64_t condBitsPerElement = node.srcs[0]->getBitsPerElement(PimBitWidth::ACTUAL);
+      uint64_t dataBitsPerElement = node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL);
+      uint64_t condMaxGdlItr = std::ceil(maxElementsPerRegion * condBitsPerElement * 1.0 / effectiveChunkWidth);
+      uint64_t condMinGdlItr = std::ceil(minElementsPerRegion * condBitsPerElement * 1.0 / effectiveChunkWidth);
+      uint64_t dataMaxGdlItr = std::ceil(maxElementsPerRegion * dataBitsPerElement * 1.0 / effectiveChunkWidth);
+      uint64_t dataMinGdlItr = std::ceil(minElementsPerRegion * dataBitsPerElement * 1.0 / effectiveChunkWidth);
+
+      for (uint64_t p = 0; p < numPass; ++p) {
+        uint64_t condTotalChunks = p < numPass - 1 ? condMaxGdlItr : condMinGdlItr;
+        uint64_t dataTotalChunks = p < numPass - 1 ? dataMaxGdlItr : dataMinGdlItr;
+
+        // condBool read (READ_SRC1)
+        if (node.numRead1 > 0) {
+          for (uint64_t c = 0; c < condTotalChunks; ++c) {
+            if (c == 0) {
+              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::ACTIVATE_READ, currEventId++, node.cmdId, c, p, condBitsPerElement);
+              cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+            }
+            if (c == condTotalChunks - 1) {
+              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_READ, currEventId++, node.cmdId, c, p, condBitsPerElement);
+              cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+            }
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::READ_SRC1, currEventId++, node.cmdId, c, p, condBitsPerElement);
+            cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+          }
+        }
+
+        // src1/src2 data reads (READ_SRC2); numRead2 accumulates how many need reading (0, 1, or 2)
+        if (node.numRead2 > 0) {
+          for (uint64_t c = 0; c < dataTotalChunks; ++c) {
+            if (c == 0) {
+              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::ACTIVATE_READ, currEventId++, node.cmdId, c, p, dataBitsPerElement);
+              cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+            }
+            if (c == dataTotalChunks - 1) {
+              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_READ, currEventId++, node.cmdId, c, p, dataBitsPerElement);
+              cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+            }
+            for (unsigned r = 0; r < node.numRead2; ++r) {
+              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::READ_SRC2, currEventId++, node.cmdId, c, p, dataBitsPerElement);
+              cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+            }
+          }
+        }
+
+        // dest write (WRITE_CHUNK)
+        if (node.numWrite > 0) {
+          for (uint64_t c = 0; c < dataTotalChunks; ++c) {
+            if (c == 0) {
+              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::ACTIVATE_WRITE, currEventId++, node.cmdId, c, p, dataBitsPerElement);
+              cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+            }
+            if (c == dataTotalChunks - 1) {
+              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_WRITE, currEventId++, node.cmdId, c, p, dataBitsPerElement);
+              cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+            }
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::WRITE_CHUNK, currEventId++, node.cmdId, c, p, dataBitsPerElement);
+            cmdMap[node.cmdId].push_back(en); node.events[p][c].push_back(en);
+          }
+        }
+
+        // compute event
+        pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::COMPUTE_CHUNK, currEventId++, node.cmdId, 0, p, dataBitsPerElement);
+        cmdMap[node.cmdId].push_back(en); node.events[p][0].push_back(en);
+      }
     } else {
       for (uint64_t p = 0; p < numPass; ++p) {
         if (p == 0 && (node.cmdType == PimCmdEnum::ADD_SCALAR || node.cmdType == PimCmdEnum::SUB_SCALAR ||
@@ -1640,6 +1708,12 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
       maxObjBits = std::max<uint64_t>(maxObjBits,
           static_cast<uint64_t>(node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL)) * node.dests[0]->getMaxElementsPerRegion());
       bitsPerElement = std::max(bitsPerElement, node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL));
+    } else if (node.cmdType == PimCmdEnum::COND_SELECT) {
+      // Use dest (int32) for GRF sizing; condBool (srcs[0]) is 1-bit and would underestimate
+      has2Src1Dest = true;
+      maxObjBits = std::max<uint64_t>(maxObjBits,
+          static_cast<uint64_t>(node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL)) * node.dests[0]->getMaxElementsPerRegion());
+      bitsPerElement = std::max(bitsPerElement, node.dests[0]->getBitsPerElement(PimBitWidth::ACTUAL));
     } else {
       for (const auto& src : node.srcs) {
         bitsPerElement = std::max(bitsPerElement, src->getBitsPerElement(PimBitWidth::ACTUAL));
@@ -1784,6 +1858,58 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
         if (broadcastShouldWriteBack(node)) {
           shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
         }
+      }
+      continue;
+    }
+
+    if (node.cmdType == PimCmdEnum::COND_SELECT) {
+      // srcs = {condBool, src1, src2}, dests = {dest}
+      if (node.srcs.size() < 3 || node.dests.empty()) {
+        printf("PIM-Error: COND_SELECT node has insufficient srcs (%zu) or dests (%zu).\n",
+               node.srcs.size(), node.dests.size());
+        return perfEnergies;
+      }
+      PimObjId condBoolId = node.srcs[0]->getObjId();
+      PimObjId src1Id = node.srcs[1]->getObjId();
+      PimObjId src2Id = node.srcs[2]->getObjId();
+      PimObjId dstId = node.dests[0]->getObjId();
+      pinnedObjs.insert(condBoolId);
+      pinnedObjs.insert(src1Id);
+      pinnedObjs.insert(src2Id);
+      pinnedObjs.insert(dstId);
+
+      pimObjInfo* dst = node.dests[0];
+      uint64_t bitsDst = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
+      uint64_t numItr = std::ceil(static_cast<double>(bitsDst) / maxBitsPerObj);
+
+      // condBool: always needs a DRAM read unless already in register
+      if (!inVectorRegister.count(condBoolId) && !inScalarRegister.count(condBoolId))
+        node.numRead1 += numItr;
+      else
+        touchVectorObject(condBoolId);
+
+      // src1: check register
+      if (!inVectorRegister.count(src1Id) && !inScalarRegister.count(src1Id))
+        node.numRead2 += numItr;
+      else
+        touchVectorObject(src1Id);
+
+      // src2: accumulated into numRead2
+      if (!inVectorRegister.count(src2Id) && !inScalarRegister.count(src2Id))
+        node.numRead2 += numItr;
+      else
+        touchVectorObject(src2Id);
+
+      // dest
+      if (!inVectorRegister.count(dstId)) {
+        if (inScalarRegister.count(dstId))
+          inScalarRegister.erase(dstId);
+        if (!addVectorObject(dstId, dst, pinnedObjs, cmdId, "dstId"))
+          return perfEnergies;
+        shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
+      } else {
+        touchVectorObject(dstId);
+        shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
       }
       continue;
     }
