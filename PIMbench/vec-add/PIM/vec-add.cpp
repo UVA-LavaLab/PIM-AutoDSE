@@ -92,11 +92,11 @@ void vectorAddition(uint64_t vectorLength, std::vector<int> &src1, std::vector<i
   }
 
   PimFusionBlock prog;
-  prog.add(pimCopyHostToDevice, (void *)(src1.data()), srcObj1, 0UL, 0UL);
-  prog.add(pimCopyHostToDevice, (void *)(src2.data()), srcObj2, 0UL, 0UL); 
+  prog.add(pimCopyHostToDevice, (void *)(src1.data()), srcObj1, (uint64_t)0, (uint64_t)0);
+  prog.add(pimCopyHostToDevice, (void *)(src2.data()), srcObj2, (uint64_t)0, (uint64_t)0); 
   prog.add(pimAdd, srcObj1, srcObj2, srcObj1);
   dst.resize(vectorLength);
-  prog.add(pimCopyDeviceToHost, srcObj1, (void *)(dst.data()), 0UL, 0UL); 
+  prog.add(pimCopyDeviceToHost, srcObj1, (void *)(dst.data()), (uint64_t)0, (uint64_t)0); 
   PimStatus status = pimFuse(prog); 
   if (status != PIM_OK)
   {

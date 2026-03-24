@@ -96,14 +96,14 @@ void linearRegression(uint64_t dataSize, const std::vector<int> &X, const std::v
   
 
   PimFusionBlock prog;
-  prog.add(pimCopyHostToDevice, (void *)(X.data()), srcObj1, 0UL, 0UL);
-  prog.add(pimRedSum, srcObj1, static_cast<void*>(&SX), 0UL, 0UL);
+  prog.add(pimCopyHostToDevice, (void *)(X.data()), srcObj1, (uint64_t)0, (uint64_t)0);
+  prog.add(pimRedSum, srcObj1, static_cast<void*>(&SX), (uint64_t)0, (uint64_t)0);
   prog.add(pimMul, srcObj1, srcObj1, srcObj2);
-  prog.add(pimRedSum, srcObj2, static_cast<void*>(&SXX), 0UL, 0UL);
-  prog.add(pimCopyHostToDevice, (void *)(Y.data()), srcObj2, 0UL, 0UL);
-  prog.add(pimRedSum, srcObj2, static_cast<void*>(&SY), 0UL, 0UL);
+  prog.add(pimRedSum, srcObj2, static_cast<void*>(&SXX), (uint64_t)0, (uint64_t)0);
+  prog.add(pimCopyHostToDevice, (void *)(Y.data()), srcObj2, (uint64_t)0, (uint64_t)0);
+  prog.add(pimRedSum, srcObj2, static_cast<void*>(&SY), (uint64_t)0, (uint64_t)0);
   prog.add(pimMul, srcObj1, srcObj2, srcObj1);
-  prog.add(pimRedSum, srcObj1, static_cast<void*>(&SXY), 0UL, 0UL);
+  prog.add(pimRedSum, srcObj1, static_cast<void*>(&SXY), (uint64_t)0, (uint64_t)0);
   PimStatus status = pimFuse(prog);
   if (status != PIM_OK)
   {
