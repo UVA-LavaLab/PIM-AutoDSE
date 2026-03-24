@@ -106,13 +106,13 @@ void gemv(uint64_t row, uint64_t col, std::vector<int> &srcVector, std::vector<s
   prog.add(pimBroadcastInt, dstObj, static_cast<int64_t>(0));
   for (uint64_t i = 0; i < col; ++i)
   {
-    prog.add(pimCopyHostToDevice, (void *)(srcMatrix[i].data()), srcObj1, 0UL, 0UL); 
+    prog.add(pimCopyHostToDevice, (void *)(srcMatrix[i].data()), srcObj1, (uint64_t)0, (uint64_t)0); 
     prog.add(pimBroadcastInt, srcObj2, static_cast<int64_t>(srcVector[i]));
     prog.add(pimMul, srcObj1, srcObj2, srcObj1);
     prog.add(pimAdd, dstObj, srcObj1, dstObj);
   }
   dst.resize(row);
-  prog.add(pimCopyDeviceToHost, dstObj, (void *)(dst.data()), 0UL, 0UL); 
+  prog.add(pimCopyDeviceToHost, dstObj, (void *)(dst.data()), (uint64_t)0, (uint64_t)0); 
   PimStatus status = pimFuse(prog); 
   if (status != PIM_OK)
   {

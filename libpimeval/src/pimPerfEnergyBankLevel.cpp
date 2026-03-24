@@ -44,8 +44,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjIn
   unsigned maxGDLItr = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   unsigned minGDLItr = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   unsigned numBankPerChip = numCores / m_numChipsPerRank;
-  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterCount * m_blimpRegisterBitWidth));
-  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterCount * m_blimpRegisterBitWidth));
+  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / (m_blimpVectorRegisterCount * m_blimpVectorRegisterBitWidth));
+  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / (m_blimpVectorRegisterCount * m_blimpVectorRegisterBitWidth));
   double activateMS = minGDLItr * m_tGDL < m_tRAS * m_tCK ? m_tRAS * m_tCK : m_tACT; // Use tRAS if GDL is less than tRAS
   std::printf("PIM INFO: cmd=%s, numPass=%u, bitsPerElement=%u, numCoresUsed=%u, maxElementsPerRegion=%u, minElementsPerRegion=%u, maxGDLItr=%u, minGDLItr=%u, numMaxActPre=%u, numMinActPre=%u\n",
               pimCmd::getName(cmdType, "").c_str(), numPass, bitsPerElement, numCores, maxElementsPerRegion, minElementPerRegion, maxGDLItr, minGDLItr, numMaxActPre, numMinActPre);
@@ -225,8 +225,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjIn
   unsigned minGDLItr = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   uint64_t totalOp = 0;
   unsigned numBankPerChip = numCoresUsed / m_numChipsPerRank;
-  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 * 2 / (m_blimpRegisterBitWidth * m_blimpRegisterCount));
-  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 * 2/ (m_blimpRegisterCount * m_blimpRegisterBitWidth));
+  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 * 2 / (m_blimpVectorRegisterBitWidth * m_blimpVectorRegisterCount));
+  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 * 2/ (m_blimpVectorRegisterCount * m_blimpVectorRegisterBitWidth));
   double activateMS = minGDLItr * m_tGDL < m_tRAS * m_tCK ? m_tRAS * m_tCK : m_tACT; // Use tRAS if GDL is less than tRAS
   std::printf("PIM INFO: cmd=%s, numPass=%u, bitsPerElement=%u, numCoresUsed=%u, maxElementsPerRegion=%u, minElementsPerRegion=%u, maxGDLItr=%u, minGDLItr=%u, numMaxActPre=%u, numMinActPre=%u\n",
               pimCmd::getName(cmdType, "").c_str(), numPass, bitsPerElement, numCoresUsed, maxElementsPerRegion, minElementPerRegion, maxGDLItr, minGDLItr, numMaxActPre, numMinActPre);
@@ -344,8 +344,8 @@ pimPerfEnergyBankLevel::getPerfEnergyForReduction(PimCmdEnum cmdType, const pimO
   uint64_t totalOp = 0;
   unsigned numBankPerChip = numCore / m_numChipsPerRank;
 
-  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterBitWidth * m_blimpRegisterCount));
-  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / (m_blimpRegisterBitWidth * m_blimpRegisterCount));
+  unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / (m_blimpVectorRegisterBitWidth * m_blimpVectorRegisterCount));
+  unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / (m_blimpVectorRegisterBitWidth * m_blimpVectorRegisterCount));
   double activateMS = minGDLItr * m_tGDL < m_tRAS * m_tCK ? m_tRAS * m_tCK : m_tACT; // Use tRAS if GDL is less than tRAS
   uint64_t totalAct = 0;
   uint64_t totalPre = 0;
@@ -925,12 +925,22 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
 
         for (auto& [passId, chunkMap] : producerNode.events) {
           for (auto& [chunkId, producerEventList] : chunkMap) {
-            // Find producer compute event
+            // Find producer compute event; for broadcast with DRAM write-back (scalar reg spill),
+            // fall back to WRITE_CHUNK as the completion event since no COMPUTE_CHUNK is emitted.
             pimeval::EventNode* producerEvent = nullptr;
             for (auto* e : producerEventList) {
               if (e->type == pimeval::EventType::COMPUTE_CHUNK) {
                 producerEvent = e;
                 break;
+              }
+            }
+            if (!producerEvent &&
+                (producerNode.cmdType == PimCmdEnum::BROADCAST || producerNode.cmdType == PimCmdEnum::COND_BROADCAST)) {
+              for (auto* e : producerEventList) {
+                if (e->type == pimeval::EventType::WRITE_CHUNK) {
+                  producerEvent = e;
+                  break;
+                }
               }
             }
 
@@ -1222,7 +1232,7 @@ pimPerfEnergyBankLevel::simulateExecution(std::vector<pimeval::cmdNode>& cmdGrap
   };
 
   // If register is narrower than GDL, data must be processed in register-sized chunks
-  unsigned effectiveChunkWidth = std::min((unsigned)m_GDLWidth, m_blimpRegisterBitWidth);
+  unsigned effectiveChunkWidth = std::min((unsigned)m_GDLWidth, m_blimpVectorRegisterBitWidth);
   uint64_t currEventId = 0;
   for (auto& node : cmdGraph) {
     pimObjInfo& obj = node.srcs.empty() ? *node.dests[0] : *node.srcs[0];
@@ -1694,7 +1704,12 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
   std::list<PimObjId> regLRU;
   uint64_t usedVectorBits = 0;
 
-  uint64_t totalGRFbits = m_blimpRegisterCount * m_blimpRegisterBitWidth;
+  // Scalar register state
+  unsigned usedScalarRegs = 0;
+  std::list<PimObjId> scalarRegLRU;
+  std::unordered_map<PimObjId, std::pair<size_t, uint64_t>> scalarEvictWriteBack; // cmdId + numItr for eviction write cost
+
+  uint64_t totalGRFbits = m_blimpVectorRegisterCount * m_blimpVectorRegisterBitWidth;
   bool has2Src1Dest = false;
   uint64_t maxObjBits = 0;
   unsigned bitsPerElement = 0;
@@ -1738,7 +1753,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
   }
 
   unsigned numRegPerObj = static_cast<unsigned>(
-      (maxBitsPerObj + m_blimpRegisterBitWidth - 1) / m_blimpRegisterBitWidth);
+      (maxBitsPerObj + m_blimpVectorRegisterBitWidth - 1) / m_blimpVectorRegisterBitWidth);
   printf("PIM-Info: Fusing %zu commands.\n", cmdGraph.size());
   printf("PIM-Info: Has2Src1Dest %d Total GRF bits: %lu, Max bits per object: %lu, Num registers per object: %u\n",
          has2Src1Dest, totalGRFbits, maxBitsPerObj, numRegPerObj);
@@ -1817,6 +1832,50 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
     return true;
   };
 
+  auto touchScalarObject = [&](PimObjId objId) {
+    if (inScalarRegister.count(objId)) {
+      scalarRegLRU.remove(objId);
+      scalarRegLRU.push_back(objId);
+    }
+  };
+
+  auto removeScalarObject = [&](PimObjId objId) {
+    if (!inScalarRegister.count(objId)) return;
+    scalarRegLRU.remove(objId);
+    inScalarRegister.erase(objId);
+    scalarEvictWriteBack.erase(objId);
+    usedScalarRegs--;
+  };
+
+  auto addScalarObject = [&](PimObjId objId, size_t producerCmdId, uint64_t numItr,
+                              const std::unordered_set<PimObjId>& pinnedObjs) {
+    if (m_blimpScalarRegisterCount > 0 && usedScalarRegs >= m_blimpScalarRegisterCount) {
+      // LRU eviction: find oldest non-pinned scalar register entry
+      auto victimIt = std::find_if(scalarRegLRU.begin(), scalarRegLRU.end(), [&](PimObjId id) {
+        return !pinnedObjs.count(id);
+      });
+      if (victimIt == scalarRegLRU.end()) {
+        // All scalar registers are pinned: write directly to DRAM row
+        cmdGraph[producerCmdId].numWrite += numItr;
+        return;
+      }
+      PimObjId victim = *victimIt;
+      scalarRegLRU.erase(victimIt);
+      inScalarRegister.erase(victim);
+      usedScalarRegs--;
+      // Charge ACT+WRITE+PRE cost (numItr) to the broadcast cmd that loaded the evicted value
+      if (scalarEvictWriteBack.count(victim)) {
+        cmdGraph[scalarEvictWriteBack[victim].first].numWrite += scalarEvictWriteBack[victim].second;
+        scalarEvictWriteBack.erase(victim);
+      }
+      shouldWriteBack.erase(victim);
+    }
+    inScalarRegister[objId] = true;
+    usedScalarRegs++;
+    scalarRegLRU.push_back(objId);
+    scalarEvictWriteBack[objId] = {producerCmdId, numItr};
+  };
+
   for (size_t cmdId = 0; cmdId < cmdGraph.size(); ++cmdId) {
     auto& node = cmdGraph[cmdId];
     std::unordered_set<PimObjId> pinnedObjs;
@@ -1827,7 +1886,7 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
         removeVectorObject(dstId);
         shouldWriteBack.erase(dstId);
       } else if (inScalarRegister.count(dstId)) {
-        inScalarRegister.erase(dstId);
+        removeScalarObject(dstId);
         shouldWriteBack.erase(dstId);
       }
       continue;
@@ -1847,19 +1906,19 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
       pimObjInfo* dst = node.dests[0];
       uint64_t bitsDst = dst->getBitsPerElement(PimBitWidth::ACTUAL) * dst->getMaxElementsPerRegion();
       uint64_t numItr = std::ceil(static_cast<double>(bitsDst) / maxBitsPerObj);
-      if (!inVectorRegister.count(dstId) && !inScalarRegister.count(dstId)) {
-        inScalarRegister[dstId] = true;
-        if (broadcastShouldWriteBack(node)) {
-          shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
-        }
+      if (inVectorRegister.count(dstId)) {
+        removeVectorObject(dstId);
+        shouldWriteBack.erase(dstId);
+        addScalarObject(dstId, cmdId, numItr, pinnedObjs);
+      } else if (inScalarRegister.count(dstId)) {
+        // Re-broadcast: refresh LRU position and update eviction write-back info
+        touchScalarObject(dstId);
+        scalarEvictWriteBack[dstId] = {cmdId, numItr};
       } else {
-        if (inVectorRegister.count(dstId)) {
-          removeVectorObject(dstId);
-          inScalarRegister[dstId] = true;
-        }
-        if (broadcastShouldWriteBack(node)) {
-          shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
-        }
+        addScalarObject(dstId, cmdId, numItr, pinnedObjs);
+      }
+      if (broadcastShouldWriteBack(node)) {
+        shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
       }
       continue;
     }
@@ -1887,25 +1946,31 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
       // condBool: always needs a DRAM read unless already in register
       if (!inVectorRegister.count(condBoolId) && !inScalarRegister.count(condBoolId))
         node.numRead1 += numItr;
-      else
+      else {
         touchVectorObject(condBoolId);
+        touchScalarObject(condBoolId);
+      }
 
       // src1: check register
       if (!inVectorRegister.count(src1Id) && !inScalarRegister.count(src1Id))
         node.numRead2 += numItr;
-      else
+      else {
         touchVectorObject(src1Id);
+        touchScalarObject(src1Id);
+      }
 
       // src2: accumulated into numRead2
       if (!inVectorRegister.count(src2Id) && !inScalarRegister.count(src2Id))
         node.numRead2 += numItr;
-      else
+      else {
         touchVectorObject(src2Id);
+        touchScalarObject(src2Id);
+      }
 
       // dest
       if (!inVectorRegister.count(dstId)) {
         if (inScalarRegister.count(dstId))
-          inScalarRegister.erase(dstId);
+          removeScalarObject(dstId);
         if (!addVectorObject(dstId, dst, pinnedObjs, cmdId, "dstId"))
           return perfEnergies;
         shouldWriteBack[dstId] = std::make_pair(cmdId, numItr);
@@ -1940,17 +2005,19 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
         }
       } else {
         touchVectorObject(srcId1);
+        touchScalarObject(srcId1);
       }
 
       if (!inVectorRegister.count(srcId2) && !inScalarRegister.count(srcId2)) {
         node.numRead2 += numItr;
       } else {
         touchVectorObject(srcId2);
+        touchScalarObject(srcId2);
       }
 
       if (!inVectorRegister.count(dstId)) {
         if (inScalarRegister.count(dstId)) {
-          inScalarRegister.erase(dstId);
+          removeScalarObject(dstId);
         }
         if (!addVectorObject(dstId, dst, pinnedObjs, cmdId, "dstId")) {
           return perfEnergies;
@@ -1974,11 +2041,12 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
         node.numRead1 += numItr;
       } else {
         touchVectorObject(srcId);
+        touchScalarObject(srcId);
       }
 
       if (!inVectorRegister.count(dstId)) {
         if (inScalarRegister.count(dstId)) {
-          inScalarRegister.erase(dstId);
+          removeScalarObject(dstId);
         }
         if (!addVectorObject(dstId, dst, pinnedObjs, cmdId, "destId")) {
           return perfEnergies;
@@ -2010,12 +2078,14 @@ pimPerfEnergyBankLevel::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& c
         }
       } else {
         touchVectorObject(srcId1);
+        touchScalarObject(srcId1);
       }
 
       if (!inVectorRegister.count(srcId2) && !inScalarRegister.count(srcId2)) {
         node.numRead2 += numItr;
       } else {
         touchVectorObject(srcId2);
+        touchScalarObject(srcId2);
       }
     }
   }

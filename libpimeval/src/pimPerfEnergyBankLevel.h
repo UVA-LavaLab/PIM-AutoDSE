@@ -22,8 +22,10 @@ public:
   pimPerfEnergyBankLevel(const pimPerfEnergyModelParams& params) : pimPerfEnergyBase(params) {
     auto cfg = params.getArchSpecificConfig<pimeval::BankLevelConfig>();
     if (cfg) {
-      m_blimpRegisterCount = cfg->blimpRegisterCount;
-      m_blimpRegisterBitWidth = cfg->blimpRegisterBitWidth == 0 ? m_GDLWidth : cfg->blimpRegisterBitWidth;
+      m_blimpVectorRegisterCount = cfg->blimpRegisterCount;
+      m_blimpVectorRegisterBitWidth = cfg->blimpRegisterBitWidth == 0 ? m_GDLWidth : cfg->blimpRegisterBitWidth;
+      if (cfg->blimpScalarRegisterCount > 0)
+        m_blimpScalarRegisterCount = cfg->blimpScalarRegisterCount;
     }
   }
   virtual ~pimPerfEnergyBankLevel() {}
@@ -43,8 +45,9 @@ protected:
   // Following values are taken from fulcrum paper as BLIMP paper does not model energy
   double m_blimpArithmeticEnergy = 0.0000000004992329586 * m_simdUnitCount; // mJ
   double m_blimpLogicalEnergy = 0.0000000001467846411 * m_simdUnitCount; // mJ
-  unsigned m_blimpRegisterCount = 3; // Number of registers in BLIMP core
-  unsigned m_blimpRegisterBitWidth = m_GDLWidth; // Bit width of each BLIMP register, 0 means use GDL width as default
+  unsigned m_blimpVectorRegisterCount = 3; // Number of registers in BLIMP core
+  unsigned m_blimpVectorRegisterBitWidth = m_GDLWidth; // Bit width of each BLIMP register, 0 means use GDL width as default
+  unsigned m_blimpScalarRegisterCount = 16; // Number of scalar registers of size GDL width in BLIMP core
 private:
   void simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph, std::vector<pimeval::perfEnergy> &perfEnergies) const;
 };

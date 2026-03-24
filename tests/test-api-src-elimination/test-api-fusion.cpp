@@ -53,7 +53,7 @@ bool testFused(PimDeviceEnum deviceType)
   for (uint64_t i = 1; i < 10; ++i) {
     prog.add(pimMul, objSrc1, objDest1, objDest1);
   }
-  prog.add(pimCopyDeviceToHost, objDest1, (void *)(dest1.data()), 0UL, 0UL);
+  prog.add(pimCopyDeviceToHost, objDest1, (void *)(dest1.data()), (uint64_t)0, (uint64_t)0);
   status = pimFuse(prog);
   assert(status == PIM_OK);
 

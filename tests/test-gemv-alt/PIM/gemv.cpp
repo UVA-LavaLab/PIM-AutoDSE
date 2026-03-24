@@ -87,12 +87,12 @@ void gemv(uint64_t row, uint64_t col, std::vector<int> &srcVector, std::vector<s
   PimObjId fuse_expr_0 = pimAllocAssociated(fuse_root, PIM_BOOL);
   PimObjId fuse_expr_2 = pimAllocAssociated(fuse_root, PIM_INT8);
   // Emitting Copy Host to Device
-  prog.add(pimCopyHostToDevice,(void*)srcVector.data(), fuse_root, 0UL, 0UL);
-  prog.add(pimCopyHostToDevice,(void*)srcVector.data(), fuse_expr_2, 0UL, 0UL);
+  prog.add(pimCopyHostToDevice,(void*)srcVector.data(), fuse_root, (uint64_t)0, (uint64_t)0);
+  prog.add(pimCopyHostToDevice,(void*)srcVector.data(), fuse_expr_2, (uint64_t)0, (uint64_t)0);
   // Creating PIM Fused Program
   prog.add(pimLT,fuse_root, fuse_expr_2 , fuse_expr_0);
   // Emitting Copy Device to Host
-  prog.add(pimCopyDeviceToHost,fuse_expr_0,(void*)dst.data(), 0UL, 0UL);
+  prog.add(pimCopyDeviceToHost,fuse_expr_0,(void*)dst.data(), (uint64_t)0, (uint64_t)0);
   pimFuse(prog);
   // Emitting Deallocations
   pimFree(fuse_expr_0);

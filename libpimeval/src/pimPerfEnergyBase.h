@@ -28,6 +28,7 @@ namespace pimeval {
   struct BankLevelConfig {
     unsigned blimpRegisterCount = 3;
     unsigned blimpRegisterBitWidth = 0; // 0 means use GDLWidth as default
+    unsigned blimpScalarRegisterCount = 0; // 0 means unlimited (no capacity enforcement)
   };
 
   class perfEnergy
