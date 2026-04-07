@@ -34,6 +34,10 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjInf
   unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 / (m_grfWidth * m_grfCount));
   unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / (m_grfWidth * m_grfCount));
   uint64_t totalOp = 0;
+  uint64_t totalACT = 0;
+  uint64_t totalPRE = 0;
+  uint64_t totalCAS = 0;
+  uint64_t totalL = 0;
   unsigned numBankPerChip = numCores / m_numChipsPerRank;
   double activateMS = (m_tACT + (minGDLItr * m_tGDL)) < m_tRAS * m_tCK ? ((m_tRAS * m_tCK) - (minGDLItr * m_tGDL)) : m_tACT; // Use tRAS if GDL is less than tRAS
 
@@ -44,7 +48,9 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjInf
     // As a result, depending on the bitsPerElement and columns per bank row, same row may be opened multiple times -- this is calculated as numActPre.
     case PimCmdEnum::ADD_SCALAR:
     case PimCmdEnum::MUL_SCALAR:
-    { 
+    case PimCmdEnum::MIN_SCALAR:
+    case PimCmdEnum::MAX_SCALAR:
+    {
       msRead = ((m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre) + ((activateMS + m_tPRE) * numMinActPre);
       msWrite = ((m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre) + ((activateMS + m_tPRE) * numMinActPre);
       msCompute = (minGDLItr * aquaboltCoreCycle * numberOfOperationPerElement) + ((maxGDLItr * aquaboltCoreCycle * numberOfOperationPerElement) * (numPass - 1));
@@ -55,6 +61,11 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjInf
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
+      // 1 read row + 1 write row per ACT/PRE batch; 1 scalar CAS; 1 read + 1 write CAS per GDL iter
+      totalACT = numMaxActPre * 2 * (numPass - 1) + numMinActPre * 2;
+      totalPRE = totalACT;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 2 + 1;
+      totalL   = maxGDLItr * (numPass - 1) + minGDLItr;
       break;
     }
     case PimCmdEnum::AES_SBOX:
@@ -71,8 +82,6 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjInf
     case PimCmdEnum::LT_SCALAR:
     case PimCmdEnum::EQ_SCALAR:
     case PimCmdEnum::NE_SCALAR:
-    case PimCmdEnum::MIN_SCALAR:
-    case PimCmdEnum::MAX_SCALAR:
     case PimCmdEnum::SHIFT_BITS_L:
     case PimCmdEnum::SHIFT_BITS_R:
     default:
@@ -80,7 +89,7 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc1(PimCmdEnum cmdType, const pimObjInf
       break;
   }
 
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp);
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, totalACT, totalPRE, totalCAS, totalL);
 }
 
 //! @brief  Perf energy model of aquabolt PIM for func2
@@ -102,6 +111,10 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjInf
   unsigned minGDLItr = std::ceil(minElementPerRegion * bitsPerElement * 1.0 / m_GDLWidth);
   double aquaboltCoreCycle = m_tGDL;
   uint64_t totalOp = 0;
+  uint64_t totalACT = 0;
+  uint64_t totalPRE = 0;
+  uint64_t totalCAS = 0;
+  uint64_t totalL = 0;
   unsigned numBankPerChip = numCoresUsed / m_numChipsPerRank;
   unsigned numMaxActPre = std::ceil(maxElementsPerRegion * bitsPerElement * 1.0 * 2 / (m_grfWidth * m_grfCount));
   unsigned numMinActPre = std::ceil(minElementPerRegion * bitsPerElement * 1.0 * 2/ (m_grfWidth * m_grfCount));
@@ -111,6 +124,8 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjInf
     // Refer to Aquabolt Paper (Table 2, Figure 5). OP Format: GRF = BANK +/* GRF
     case PimCmdEnum::ADD:
     case PimCmdEnum::MUL:
+    case PimCmdEnum::MIN:
+    case PimCmdEnum::MAX:
     {
       unsigned numberOfOperationPerElement = std::ceil(bitsPerElement * 1.0 / m_aquaboltFPUBitWidth);
       msRead = (2 * (m_tACT + m_tPRE) * (numPass - 1) * numMaxActPre) + (maxGDLItr * m_tGDL * (numPass - 1)) + (2 * numMinActPre * (activateMS + m_tPRE)) + (minGDLItr * m_tGDL);
@@ -124,6 +139,11 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjInf
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements();
+      // 2 read rows + 1 write row per ACT/PRE batch (numMaxActPre already has factor-2 for 2 srcs)
+      totalACT = numMaxActPre * 3 * (numPass - 1) + numMinActPre * 3;
+      totalPRE = totalACT;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3;  // 2 reads + 1 write per GDL iter
+      totalL   = maxGDLItr * (numPass - 1) + minGDLItr;
       break;
     }
     case PimCmdEnum::SCALED_ADD:
@@ -155,6 +175,11 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjInf
       mjEnergy += (m_eW_L * maxGDLItr * (numPass-1) * numBankPerChip * m_numRanks + (m_eW_L * minGDLItr * numBankPerChip * m_numRanks));
       mjEnergy += m_pBChip * m_numChipsPerRank * m_numRanks * msRuntime;
       totalOp = obj.getNumElements() * 2;
+      // 2 read rows + 1 write row per ACT/PRE batch (same structure as ADD/MUL)
+      totalACT = numMaxActPre * 3 * (numPass - 1) + numMinActPre * 3;
+      totalPRE = totalACT;
+      totalCAS = (maxGDLItr * (numPass - 1) + minGDLItr) * 3;
+      totalL   = maxGDLItr * (numPass - 1) + minGDLItr;
       break;
     }
     case PimCmdEnum::DIV:
@@ -167,14 +192,12 @@ pimPerfEnergyAquabolt::getPerfEnergyForFunc2(PimCmdEnum cmdType, const pimObjInf
     case PimCmdEnum::LT:
     case PimCmdEnum::EQ:
     case PimCmdEnum::NE:
-    case PimCmdEnum::MIN:
-    case PimCmdEnum::MAX:
     default:
       printf("PIM-Warning: Unsupported for Aquabolt: %s\n", pimCmd::getName(cmdType, "").c_str());
       break;
   }
 
-  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp);
+  return pimeval::perfEnergy(msRuntime, mjEnergy, msRead, msWrite, msCompute, totalOp, totalACT, totalPRE, totalCAS, totalL);
 }
 
 
@@ -1183,6 +1206,10 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
     case PimCmdEnum::ADD:
     case PimCmdEnum::MUL:
     case PimCmdEnum::BROADCAST:
+    case PimCmdEnum::MIN:
+    case PimCmdEnum::MAX:
+    case PimCmdEnum::MIN_SCALAR:
+    case PimCmdEnum::MAX_SCALAR:
     {
       double itr = (ev->bitsPerElement * 1.0 / m_aquaboltFPUBitWidth);
       cycleRequired = std::ceil(m_tCCD_L * itr);
@@ -1210,14 +1237,10 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
     case PimCmdEnum::REDSUM_RANGE:
     case PimCmdEnum::REDMIN_RANGE:
     case PimCmdEnum::REDMAX_RANGE:
-    case PimCmdEnum::MIN:
-    case PimCmdEnum::MAX:
     case PimCmdEnum::GT:
     case PimCmdEnum::LT:
     case PimCmdEnum::EQ:
     case PimCmdEnum::NE:
-    case PimCmdEnum::MIN_SCALAR:
-    case PimCmdEnum::MAX_SCALAR:
     case PimCmdEnum::GT_SCALAR:
     case PimCmdEnum::LT_SCALAR:
     case PimCmdEnum::EQ_SCALAR:
@@ -1630,7 +1653,9 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
   for (auto& node : cmdGraph) {
     if (node.cmdType != PimCmdEnum::ADD && node.cmdType != PimCmdEnum::MUL &&
         node.cmdType != PimCmdEnum::SCALED_ADD && node.cmdType != PimCmdEnum::ADD_SCALAR &&
-        node.cmdType != PimCmdEnum::MUL_SCALAR && node.cmdType != PimCmdEnum::BROADCAST) {
+        node.cmdType != PimCmdEnum::MUL_SCALAR && node.cmdType != PimCmdEnum::BROADCAST &&
+        node.cmdType != PimCmdEnum::MAX && node.cmdType != PimCmdEnum::MIN && node.cmdType != PimCmdEnum::MIN_SCALAR &&
+        node.cmdType != PimCmdEnum::MAX_SCALAR) {
       continue; // Skip unsupported commands
     }
 
@@ -1734,12 +1759,12 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
             cmdMap[node.cmdId].push_back(en);
             node.events[p][c].push_back(en);
             read1Ch += R1_stride;
-            if (node.srcs.size() == 2 && node.numRead2 > 0 && c == read2Ch) {
-              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::ACTIVATE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
-              cmdMap[node.cmdId].push_back(en);
-              node.events[p][c].push_back(en);
-              read2Ch += R2_stride;
-            }
+          }
+          if (node.srcs.size() == 2 && node.numRead2 > 0 && c == read2Ch) {
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::ACTIVATE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
+            cmdMap[node.cmdId].push_back(en);
+            node.events[p][c].push_back(en);
+            read2Ch += R2_stride;
           }
           if (!node.dests.empty() && node.numWrite > 0 && (c == totalChunks - 1 || c == writePCh)) {
             pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_WRITE, currEventId++, node.cmdId, c, p, bitsPerElement);
@@ -1752,16 +1777,20 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
             cmdMap[node.cmdId].push_back(en);
             node.events[p][c].push_back(en);
             read1PCh += R1_stride;
-            if (node.srcs.size() == 2 && node.numRead2 > 0 && (c == totalChunks - 1 || c == read2PCh)) {
-              pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
-              cmdMap[node.cmdId].push_back(en);
-              node.events[p][c].push_back(en);
-              read2PCh += R2_stride;
-            }
           }
-          for (size_t s = 0; s < node.srcs.size(); ++s) {
-            if (node.numRead1 <= s) break;
-            pimeval::EventNode* en = pimeval::generateEvent(s == 0 ? pimeval::EventType::READ_SRC1 : pimeval::EventType::READ_SRC2, currEventId++, node.cmdId, c, p, bitsPerElement);
+          if (node.srcs.size() == 2 && node.numRead2 > 0 && (c == totalChunks - 1 || c == read2PCh)) {
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::PRECHARGE_READ, currEventId++, node.cmdId, c, p, bitsPerElement);
+            cmdMap[node.cmdId].push_back(en);
+            node.events[p][c].push_back(en);
+            read2PCh += R2_stride;
+          }
+          if (node.srcs.size() > 0 && node.numRead1 > 0) {
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::READ_SRC1, currEventId++, node.cmdId, c, p, bitsPerElement);
+            cmdMap[node.cmdId].push_back(en);
+            node.events[p][c].push_back(en);
+          }
+          if (node.srcs.size() == 2 && node.numRead2 > 0) {
+            pimeval::EventNode* en = pimeval::generateEvent(pimeval::EventType::READ_SRC2, currEventId++, node.cmdId, c, p, bitsPerElement);
             cmdMap[node.cmdId].push_back(en);
             node.events[p][c].push_back(en);
           } 
@@ -2034,7 +2063,7 @@ pimPerfEnergyAquabolt::simulateExecution(std::vector<pimeval::cmdNode>& cmdGraph
     } else {
       perfEnergies[c.cmdId].m_totalOp = c.srcs.empty() ? 0 : c.srcs[0]->getNumElements();
     }
-    if (c.cmdType == PimCmdEnum::MUL_SCALAR || c.cmdType == PimCmdEnum::ADD_SCALAR) {
+    if (c.cmdType == PimCmdEnum::MUL_SCALAR || c.cmdType == PimCmdEnum::ADD_SCALAR || c.cmdType == PimCmdEnum::MAX_SCALAR || c.cmdType == PimCmdEnum::MIN_SCALAR) {
       perfEnergies[c.cmdId].m_msRead += m_tCCD_L * m_tCK;
     }
     perfEnergies[c.cmdId].m_msRuntime = perfEnergies[c.cmdId].m_msRead + perfEnergies[c.cmdId].m_msWrite + perfEnergies[c.cmdId].m_msCompute;
@@ -2083,7 +2112,7 @@ pimPerfEnergyAquabolt::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& cm
     if (node.srcs.size() == 2 && node.dests.size() == 1 &&
         (node.cmdType == PimCmdEnum::ADD || node.cmdType == PimCmdEnum::MUL ||
          node.cmdType == PimCmdEnum::SCALED_ADD || node.cmdType == PimCmdEnum::ADD_SCALAR ||
-         node.cmdType == PimCmdEnum::MUL_SCALAR)) {
+         node.cmdType == PimCmdEnum::MUL_SCALAR || node.cmdType == PimCmdEnum::MAX_SCALAR || node.cmdType == PimCmdEnum::MIN_SCALAR || node.cmdType == PimCmdEnum::MAX || node.cmdType == PimCmdEnum::MIN)) {
       has2Src1Dest = true;
       mm = node.srcs[0]->getBitsPerElement(PimBitWidth::ACTUAL) * node.srcs[0]->getMaxElementsPerRegion();
       bitsPerElement = std::max(bitsPerElement, node.srcs[0]->getBitsPerElement(PimBitWidth::ACTUAL));
@@ -2139,9 +2168,12 @@ pimPerfEnergyAquabolt::getPerfEnergyForPIMProg(std::vector<pimeval::cmdNode>& cm
       continue;
     }
 
-    if (node.cmdType != PimCmdEnum::ADD && node.cmdType != PimCmdEnum::MUL &&
+    if (
+      node.cmdType != PimCmdEnum::ADD && node.cmdType != PimCmdEnum::MUL &&
         node.cmdType != PimCmdEnum::SCALED_ADD && node.cmdType != PimCmdEnum::ADD_SCALAR &&
-        node.cmdType != PimCmdEnum::MUL_SCALAR && node.cmdType != PimCmdEnum::BROADCAST) {
+        node.cmdType != PimCmdEnum::MUL_SCALAR && node.cmdType != PimCmdEnum::BROADCAST &&
+        node.cmdType != PimCmdEnum::MAX && node.cmdType != PimCmdEnum::MIN &&
+        node.cmdType != PimCmdEnum::MAX_SCALAR && node.cmdType != PimCmdEnum::MIN_SCALAR) {
       continue; // Skip unsupported commands
     }
 
