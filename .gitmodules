@@ -1,0 +1,9 @@
+[submodule "MISAAL"]
+	path = MISAAL
+	url = https://github.com/RafaeNoor/MISAAL.git
+	branch = pim-fused
+
+[submodule "Hydride"]
+	path = Hydride
+	url = https://github.com/AkashIwnK/Hydride.git
+	branch = bitserial

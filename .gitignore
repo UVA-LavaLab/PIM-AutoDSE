@@ -1,4 +1,6 @@
+# ---------------------------------------------------------------------------
 # Project files
+# ---------------------------------------------------------------------------
 libpimeval/build/
 libpimeval/lib/
 result-local.txt
@@ -14,3 +16,73 @@ compile_commands.json
 
 # Editors
 .vscode/
+
+# ---------------------------------------------------------------------------
+# Benchmark build products
+# ---------------------------------------------------------------------------
+benchmarks/*/bin/
+benchmarks/logs/
+benchmarks/results/
+benchmarks/**/*_compute_log
+benchmarks/**/*_data_movement_log
+benchmarks/**/*_pim_header.h
+benchmarks/**/*_pim_header.h.defs
+
+# Halide / MISAAL codegen scratch (see the `clean` target)
+halide_expr_*
+*_misaal.py
+*_misaal_misaal.py
+*.rkt
+*.egg
+egg.out.txt*
+pim_fused_lowering.h
+
+# ---------------------------------------------------------------------------
+# DSE run artifacts
+# ---------------------------------------------------------------------------
+*_fused_log.txt
+*_unfused_log.txt
+check_log
+check_log_fused
+perf_logs/
+dse_logs/
+dse_logs_*/
+dse_perf_logs_*/
+aqbolt_dse_logs/
+work_dir_*/
+*_test.cpp
+failed.log
+
+# ---------------------------------------------------------------------------
+# Generated / vendored binaries
+# ---------------------------------------------------------------------------
+*.a
+*.so
+*.pickle
+*.tar.gz
+
+# Enumerator outputs (regenerate via isa/gen)
+fused_lower.cpp
+unfused_lower.cpp
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.pyc
+*.pyo
+
+# PLY parser caches (regenerated on import)
+parser.out
+parsetab.py
+
+# OpenTuner (its SQLite DB is named after the hostname - never commit)
+opentuner.db/
+*.db
+*.db-journal
+
+# ---------------------------------------------------------------------------
+# Scratch
+# ---------------------------------------------------------------------------
+tmp.txt
+log
