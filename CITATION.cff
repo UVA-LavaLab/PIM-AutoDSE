@@ -1,0 +1,60 @@
+cff-version: 1.2.0
+message: "If you use PIM-AutoDSE in your research, please cite the paper below."
+title: "PIM-AutoDSE: Automated ISA and Design Space Exploration for PIM"
+abstract: >-
+  Processing-in-memory (PIM) offers a promising solution to the memory wall,
+  but the Instruction Set Architecture (ISA) of PIM has never been
+  systematically evaluated. PIM ISA choices - such as instruction fusion -
+  directly affect DRAM read/write operations: an unfused instruction spills its
+  intermediate result back to the DRAM array, and each spill costs an
+  ACTIVATE/PRECHARGE pair that inflates application runtime and energy. We
+  present PIM-AutoDSE, a retargetable framework that extends PIMeval, a PIM
+  simulator, to provide cycle-accurate performance and energy analysis
+  supporting features including instruction fusion, register contention, and
+  prefetching. PIM-AutoDSE further extends the synthesis-based compiler MISAAL
+  to provide code generation from high-level languages to diverse PIM
+  architectures, and proposes a methodology for PIM ISA synthesis from
+  pseudocode to automatically generate RISC- and CISC-like ISAs. Using
+  PIM-AutoDSE, we conduct the first systematic study of instruction fusion for
+  PIM, demonstrating up to 2.7x improvement in execution runtime and energy
+  over non-fused baselines across different workloads.
+type: software
+license: MIT
+repository-code: "https://github.com/UVA-LavaLab/PIM-AutoDSE"
+
+authors:
+  - family-names: Noor
+    given-names: "Abdul Rafae"
+    email: arnoor2@illinois.edu
+    affiliation: "University of Illinois Urbana-Champaign"
+  - family-names: Siddique
+    given-names: "Farzana Ahmed"
+    email: farzana@virginia.edu
+    affiliation: "University of Virginia"
+  - family-names: Kothari
+    given-names: Akash
+    email: akashk4@illinois.edu
+    affiliation: "University of Illinois Urbana-Champaign"
+  - family-names: Guo
+    given-names: Deyuan
+    email: dg7vp@virginia.edu
+    affiliation: "University of Virginia"
+  - family-names: Skadron
+    given-names: Kevin
+    email: skadron@virginia.edu
+    affiliation: "University of Virginia"
+  - family-names: Adve
+    given-names: Vikram
+    email: vadve@illinois.edu
+    affiliation: "University of Illinois Urbana-Champaign"
+
+keywords:
+  - processing-in-memory
+  - PIM
+  - instruction set architecture
+  - design space exploration
+  - instruction fusion
+  - compilers
+  - DRAM
+
+# TODO: fill in once the venue and year are final, and add `doi:` / `preferred-citation:`.

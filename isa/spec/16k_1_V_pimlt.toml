@@ -1,0 +1,25 @@
+
+title = "Lesser than operation on 8 bit elements"
+
+
+[dram_pimlt]
+
+
+
+[dram_pimlt.v16384_e1__v16384_e8__v16384_e8]
+name = "dram_pimlt"
+num_operands = 2
+operand_sizes = [131072, 131072] # Number of bits for each operand
+operand_layouts = ["DRAM_VERT", "DRAM_VERT"] 
+operand_elem_bw = [8, 8]
+result_layout = "DRAM_VERT"
+result_size = 16384
+result_elem_bw = 1
+signedness = 1
+semantics = """\
+DEFINE dram_pimlt_v16384_e1(a, b):
+   FOR j IN RANGE(0, 16384, 1):
+    i = j*8
+    dst[j] = (a[i+7:i] < b[i+7:i]) ? 1 : 0
+   ENDFOR
+"""

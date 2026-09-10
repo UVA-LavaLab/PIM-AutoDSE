@@ -1,0 +1,24 @@
+
+title = "Performing ReLU activation function with 8 bit elements"
+
+
+[dram_pimReLU]
+
+
+
+[dram_pimReLU.v16384_e8__v16384_e8__v1_e8]
+name = "dram_pimReLU"
+num_operands = 1
+operand_sizes = [131072] # Number of bits for each operand
+operand_layouts = ["DRAM_VERT"] 
+operand_elem_bw = [8]
+result_layout = "DRAM_VERT"
+result_size = 131072
+result_elem_bw = 8
+signedness = 1
+semantics = """\
+DEFINE dram_pimReLU_v16384_e8(a, b):
+   FOR i IN RANGE(0, 131072, 8):
+    dst[i+7:i] = (a[i+7:i] > 0) ? a[i+7:i] : 0
+   ENDFOR
+"""

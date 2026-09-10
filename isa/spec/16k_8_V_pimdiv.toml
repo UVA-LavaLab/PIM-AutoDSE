@@ -1,0 +1,24 @@
+
+title = "Vector Division of 8 bit elements"
+
+
+[dram_pimdiv]
+
+
+
+[dram_pimdiv.v16384_e8__v16384_e8__v16384_e8]
+name = "dram_pimdiv"
+num_operands = 2
+operand_sizes = [131072, 131072] # Number of bits for each operand
+operand_layouts = ["DRAM_VERT", "DRAM_VERT"] 
+operand_elem_bw = [8, 8]
+result_layout = "DRAM_VERT"
+result_size = 131072
+result_elem_bw = 8
+signedness = 1
+semantics = """\
+DEFINE dram_pimdiv_v16384_e8(a, b):
+   FOR i IN RANGE(0, 131072, 8):
+    dst[i+7:i] = a[i+7:i] / b[i+7:i] 
+   ENDFOR
+"""

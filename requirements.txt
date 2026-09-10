@@ -1,0 +1,22 @@
+# Python dependencies for PIM-AutoDSE
+#
+#     pip install -r requirements.txt
+#
+# The benchmark flow (benchmarks/run_benchmarks.py, benchmarks/stats/parse_logs.py)
+# needs nothing beyond the standard library. The entries below are for the ISA
+# enumeration and DSE tooling.
+
+# Result tabulation - dse/process_dse.py, isa/perf_cost_model/AnalyzePerf.py
+pandas>=1.3
+
+# TOML parsing for the ISA specifications - isa/spec/process_toml.py
+toml>=0.10
+
+# Lexer/parser for the DRAM pseudocode grammar - isa/parser/
+ply>=3.11
+
+# Autotuner driving the design space search - isa/gen/PIM_TUNER_UTILS.py
+opentuner>=0.8
+
+# Numerics used across the cost model
+numpy>=1.20

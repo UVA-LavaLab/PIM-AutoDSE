@@ -299,14 +299,29 @@ silently elsewhere. Make these explicit paths or env vars.
 
 ## 8. Open questions
 
-1. **How do the rewrite-rule pickles reach an outside user?** `lib/patterns/`
-   in MISAAL is 2.5 GB and **only 6 `.py` files are tracked** - every pickle is
-   untracked. `PIM.py` loads the `*_v2_fix` trio (256 MB + 91 MB + 91 MB), so a
-   fresh submodule clone cannot run at all. `.gitattributes` with LFS rules for
-   exactly those three has been written to the MISAAL checkout but **not
-   committed** - MISAAL's tree is dirty (54 modified, 31 deleted, 795
-   untracked), so staging there is a deliberate act. The remaining ~2 GB of
-   `_scaled` / `_self` / non-v2 pickles are superseded and should not ship.
+1. **The rewrite-rule pickles ship via Git LFS** (decided). `lib/patterns/` in
+   MISAAL is 2.5 GB and only 6 `.py` files are tracked - every pickle is
+   untracked, so a fresh submodule clone cannot run. `PIM.py` loads the
+   `*_v2_fix` trio (256 MB + 91 MB + 91 MB); `.gitattributes` declaring LFS
+   for exactly those three is written into the MISAAL checkout.
+
+   **Still to do, and it cannot be done from here:** `git-lfs` is not installed
+   on this machine, so the objects cannot actually be converted. Once it is:
+
+   ```sh
+   cd MISAAL && git lfs install
+   git add .gitattributes lib/patterns/bitserial_fused_v2_fix.pickle \
+           lib/patterns/bitserial_fused_abstract_v2_fix.pickle \
+           lib/patterns/bitserial_fused_abstract_simplified_v2_fix.pickle
+   git lfs ls-files      # confirm they are pointers, not raw blobs
+   git commit -m "Track bitserial rewrite rules in LFS"
+   ```
+
+   Not committed here: MISAAL is a separate repo whose tree is dirty (54
+   modified, 31 deleted, 795 untracked), so staging there is a deliberate act.
+   The remaining ~2 GB of `_scaled` / `_self` / non-v2 pickles are superseded
+   and should not ship. Note ~438 MB of pickles plus ~190 MB of lowering
+   headers is ~62% of GitHub's 1 GB free LFS tier, and bandwidth is per-clone.
 2. **Does MISAAL's stale `targets/pim_fused/codegen-generator/` get removed from
    `pim-fused`?** With both submodules present, a checkout otherwise contains
    two copies of the bitsimd codegen and someone will run the older one.

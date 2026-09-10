@@ -88,8 +88,12 @@ init_submodules() {
 # 2. Halide
 #
 # MISAAL's Halide fork carries the PIM/MISAAL codegen path. Its Makefile
-# resolves LLVM through $LLVM_CONFIG and expects HYDRIDE_ROOT to point at the
-# MISAAL checkout.
+# resolves LLVM through $LLVM_CONFIG.
+#
+# IMPORTANT: build via `make distrib`, NOT CMake. Halide ships both build
+# systems, but the MISAAL fork's PIM codegen path is only wired into the
+# Makefile - a CMake build produces a libHalide without it. Do not "modernise"
+# this to cmake/ninja.
 #
 # Building LLVM itself is a multi-hour job and deliberately NOT done here -
 # point LLVM_CONFIG at an existing LLVM 12-15 install instead.

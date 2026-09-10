@@ -1,0 +1,29 @@
+
+title = "Returning either of the two 8 bit elements based on 1-bit condition operand"
+
+
+[dram_pimif_else]
+
+
+
+[dram_pimif_else.v16384_e8__v16384_e8__v16384_e8__v16384_e1]
+name = "dram_pimif_else"
+num_operands = 3
+operand_sizes = [131072, 131072, 16384] # Number of bits for each operand
+operand_layouts = ["DRAM_VERT", "DRAM_VERT", "DRAM_VERT"] 
+operand_elem_bw = [8, 8, 1]
+result_layout = "DRAM_VERT"
+result_size = 131072
+result_elem_bw = 8
+signedness = 1
+semantics = """\
+DEFINE dram_pimif_else_v16384_e8(a, b, c):
+   FOR j IN RANGE(0, 16384, 1):
+    i = j*8
+    IF c[j] == 1
+     dst[i+7:i] = a[i+7:i]
+    ELSE
+     dst[i+7:i] = a[i+7:i]
+    FI
+   ENDFOR
+"""

@@ -1,0 +1,24 @@
+
+title = "Broadcast a 8-bit scalar value across the dest vector"
+
+
+[dram_pimbrdcst]
+
+
+
+[dram_pimbrdcst.v16384_e8__v1_e8]
+name = "dram_pimbrdcst"
+num_operands = 1
+operand_sizes = [8] # Number of bits in the scalar
+operand_layouts = ["DRAM_VERT"]
+operand_elem_bw = [8]
+result_layout = "DRAM_VERT"
+result_size = 131072
+result_elem_bw = 8
+signedness = 1
+semantics = """\
+DEFINE dram_pimbrdcst_v16384_e8(a):
+   FOR i IN RANGE(0, 131072, 8):
+    dst[i+7:i] = a[7:0]
+   ENDFOR
+"""
