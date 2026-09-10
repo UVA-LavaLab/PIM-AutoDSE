@@ -94,12 +94,24 @@ benchmarks = tensor_add \
 bin_dirs = $(addsuffix /bin,$(benchmarks))
 hannk    = hannk/common_halide.cpp
 
+# NOTE: ./libpimsim/decls comes BEFORE ./libpimsim on the include path.
+# The Halide-generated source does `#include "fused_lower.h"`, and that header
+# is 94 MB / 3.19M lines of function *definitions* - compiling it into every
+# benchmark TU took >13 minutes each, for a benchmark that calls one function.
+# libpimsim/decls/ holds a declarations-only version (9 MB), and the
+# definitions are compiled once into libpimsim/{fused,unfused}_lib.o.
 CXXFLAGS_COMMON = -DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS --std=c++17 \
                   -O3 -march=native -mavx512vl -mavx512ifma \
-                  -I $(HALIDE_DISTRIB)/include -I ./libpimsim/ \
+                  -ffunction-sections -fdata-sections \
+                  -I $(HALIDE_DISTRIB)/include \
+                  -I ./libpimsim/decls -I ./libpimsim/ \
                   -lstdc++ -ldl -pthread
 
-LDFLAGS_COMMON  = -L ./libpimsim/ -lpimeval
+# The prebuilt lowering object matching the selected mode. --gc-sections drops
+# the 42505 ops this benchmark does not call.
+LOWER_LIB := ./libpimsim/$(MODE)_lib.o
+
+LDFLAGS_COMMON  = -L ./libpimsim/ -lpimeval -Wl,--gc-sections
 
 # NOTE: test/stubs.cpp is deliberately NOT linked.
 #
@@ -130,6 +142,7 @@ check-env:
 	@test -n "$(HALIDE_DISTRIB)" || { echo "HALIDE_DISTRIB unset - run: source ../env.sh"; exit 1; }
 	@test -f "$(CFG_FILE)" || { echo "no such config: $(CFG_FILE)"; echo "try: make list"; exit 1; }
 	@test -f "$(COST_CSV)" || echo "[warn] cost model CSV not found: $(COST_CSV)"
+	@test -f "$(LOWER_LIB)" || { echo "missing $(LOWER_LIB) - run ../setup.sh to build the lowering objects"; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Build + run one benchmark for the selected (CONFIG, MODE)
@@ -177,14 +190,14 @@ ifeq ($(ENABLE_HYDRIDE),1)
 	$(CXX) -DPROFILE_COMPUTE=1 $(FUSION_DEFINE) -Dbenchmark_$@ \
 		$(CXXFLAGS_COMMON) -I ./$@/bin \
 		test/run.cpp $@/bin/$@.halide_generated.cpp \
-		$(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
+		$(LOWER_LIB) $(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
 		-o $@/bin/$@_compute_run.out
 
 #	6. Data-movement-profiling binary (compute suppressed)
 	$(CXX) -DPROFILE_DATA_MOVEMENT=1 -Dbenchmark_$@ \
 		$(CXXFLAGS_COMMON) -I ./$@/bin \
 		test/run.cpp $@/bin/$@.halide_generated.cpp \
-		$(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
+		$(LOWER_LIB) $(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
 		-o $@/bin/$@_data_movement_run.out
 
 #	7. Run both under the selected config
@@ -197,7 +210,7 @@ ifeq ($(ENABLE_HYDRIDE),0)
 	$(CXX) -DPROFILE_COMPUTE=1 -Dbenchmark_$@ \
 		$(CXXFLAGS_COMMON) -I ./$@/bin \
 		test/run.cpp $@/bin/$@.halide_generated.cpp \
-		$(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
+		$(LOWER_LIB) $(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
 		-o $@/bin/$@_compute_run.out
 endif
 

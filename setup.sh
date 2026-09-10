@@ -229,6 +229,65 @@ build_libpimeval() {
 }
 
 # ---------------------------------------------------------------------------
+# 3a. Lowering libraries
+#
+# fused_lower.h / unfused_lower.h are ~94 MB each, ~3.19M lines of function
+# DEFINITIONS. Including one in every benchmark translation unit cost >13
+# minutes per benchmark per mode - for a benchmark that calls a single fused
+# op. Instead:
+#
+#   * a declarations-only header (~9 MB) goes in libpimsim/decls/, which sits
+#     earlier on the include path so the generated `#include "fused_lower.h"`
+#     resolves to it unchanged;
+#   * the definitions are compiled ONCE into libpimsim/{fused,unfused}_lib.o.
+#
+# Safe across benchmarks because the comb_* op bodies contain no VF
+# references - VF only parameterises the benchmark_* wrappers, which the
+# benchmarks never call.
+# ---------------------------------------------------------------------------
+build_lowering_libs() {
+    local lower_dir="$PIM_AUTODSE_ROOT/isa/lowering"
+    local sim_dir="$PIM_AUTODSE_ROOT/benchmarks/libpimsim"
+    local decl_dir="$sim_dir/decls"
+    mkdir -p "$decl_dir"
+
+    local flags="-DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS --std=c++17 -O3 \
+        -march=native -mavx512vl -mavx512ifma -ffunction-sections -fdata-sections \
+        -I $lower_dir -I $sim_dir"
+
+    for mode in fused unfused; do
+        local src="$lower_dir/${mode}_lower.h"
+        if [ ! -f "$src" ]; then
+            warn "$src not present (Git LFS) - skipping ${mode} lowering library"
+            continue
+        fi
+
+        local decls="$decl_dir/${mode}_lower.h"
+        if [ ! -f "$decls" ] || [ "$src" -nt "$decls" ]; then
+            log "Generating ${mode} declarations header"
+            {
+                printf '// Auto-generated from %s_lower.h - DECLARATIONS ONLY.\n' "$mode"
+                printf '#pragma once\n#include "libpimeval.h"\n#include <cstdio>\n'
+                printf '#ifndef VF\n#define VF 0\n#endif\n'
+                sed -n 's/^\(void comb_[A-Za-z0-9_]*(.*\)){$/\1);/p' "$src"
+            } > "$decls"
+        fi
+
+        local obj="$sim_dir/${mode}_lib.o"
+        if [ -f "$obj" ] && [ "$obj" -nt "$src" ]; then
+            log "${mode} lowering library up to date"
+            continue
+        fi
+
+        log "Compiling ${mode} lowering library (one-time; takes several minutes)"
+        printf '#include "%s_lower.h"\n' "$mode" > "$sim_dir/${mode}_lib.cpp"
+        ( cd "$sim_dir" && g++ $flags -c "${mode}_lib.cpp" -o "${mode}_lib.o" )
+        [ -f "$obj" ] || die "${mode} lowering library failed to build"
+        log "  -> $obj ($(du -h "$obj" | cut -f1))"
+    done
+}
+
+# ---------------------------------------------------------------------------
 # 3b. benchmarks/libpimsim - what the benchmark Makefile links against
 #
 # The Makefile compiles with `-I ./libpimsim/ -L ./libpimsim/ -lpimeval`, so
@@ -389,6 +448,7 @@ main() {
     build_egglog
     [ "$SKIP_SIM"    -eq 1 ] || build_libpimeval
     stage_libpimsim
+    build_lowering_libs
     write_env
 
     cat <<EOF
