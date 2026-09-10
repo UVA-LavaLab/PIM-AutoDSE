@@ -5,7 +5,8 @@
 #
 # Brings up a complete build:
 #
-#   1. Initialise submodules   MISAAL @ pim-fused, Hydride @ bitserial
+#   1. Initialise submodules   MISAAL @ pim-fused, Hydride @ bitserial,
+#                              egglog @ 14542d7
 #   2. Build Halide            MISAAL/frontends/halide -> distrib/
 #   3. Build libpimeval        the PIM simulator
 #   4. Emit env.sh             environment for the benchmark flow
@@ -75,13 +76,14 @@ init_submodules() {
     log "Initialising submodules"
     git -C "$PIM_AUTODSE_ROOT" submodule update --init --recursive
 
-    for sub in MISAAL Hydride; do
+    for sub in MISAAL Hydride egglog; do
         [ -d "$PIM_AUTODSE_ROOT/$sub/.git" ] || [ -f "$PIM_AUTODSE_ROOT/$sub/.git" ] \
             || die "submodule $sub failed to initialise"
     done
 
     log "  MISAAL  @ $(git -C "$PIM_AUTODSE_ROOT/MISAAL"  rev-parse --short HEAD)"
     log "  Hydride @ $(git -C "$PIM_AUTODSE_ROOT/Hydride" rev-parse --short HEAD)"
+    log "  egglog  @ $(git -C "$PIM_AUTODSE_ROOT/egglog"  rev-parse --short HEAD)"
 }
 
 # ---------------------------------------------------------------------------
@@ -173,6 +175,34 @@ EOF
             || die "Halide distrib incomplete: missing $needed"
     done
     log "Halide built at $halide_src/distrib"
+}
+
+# ---------------------------------------------------------------------------
+# 2b. egglog (equality saturation)
+#
+# Pinned to 14542d7 - MISAAL's rewrite driver is sensitive to egglog's output
+# format, and this is the revision the artifact was developed against.
+# ---------------------------------------------------------------------------
+build_egglog() {
+    local egg_src="$PIM_AUTODSE_ROOT/egglog"
+    [ -d "$egg_src" ] || die "egglog not found at $egg_src (did submodules init?)"
+
+    if ! command -v cargo >/dev/null 2>&1; then
+        warn "cargo not found - skipping egglog build."
+        warn "  Install Rust (https://rustup.rs) and re-run, or build manually:"
+        warn "    cd egglog && cargo build --release"
+        return
+    fi
+
+    if [ -x "$egg_src/target/release/egglog" ]; then
+        log "egglog already built"
+        return
+    fi
+
+    log "Building egglog (release)"
+    ( cd "$egg_src" && cargo build --release )
+    [ -x "$egg_src/target/release/egglog" ] || die "egglog build produced no binary"
+    log "egglog built at $egg_src/target/release/egglog"
 }
 
 # ---------------------------------------------------------------------------
@@ -305,12 +335,19 @@ export PIM_CONFIG_DIR="\$PIM_BENCH_ROOT/configs"
 export PIM_CONFIG="\${PIM_CONFIG:-\$PIM_CONFIG_DIR/PIMeval_Bank_LPDDR.cfg}"
 
 # ---------------------------------------------------------------------------
+# egglog (equality saturation)
+#
+# NOTE: MISAAL reads this path from lib/utils/egg_config.py, which currently
+# hardcodes an absolute path. Until that reads $EGG_PKG_PATH, point it here.
+# ---------------------------------------------------------------------------
+export EGG_PKG_PATH="\$PIM_AUTODSE_ROOT/egglog"
+export PATH="\$EGG_PKG_PATH/target/release:\$EGG_PKG_PATH/target/debug:\$PATH"
+
+# ---------------------------------------------------------------------------
 # External tools
 # ---------------------------------------------------------------------------
 # Racket is required by Rosette (synthesis). Set RACKET_ROOT if not on PATH.
 [ -n "\${RACKET_ROOT:-}" ] && export PATH="\$RACKET_ROOT/bin:\$PATH"
-# egglog drives equality saturation. Set EGGLOG_ROOT if not on PATH.
-[ -n "\${EGGLOG_ROOT:-}" ] && export PATH="\$EGGLOG_ROOT:\$PATH"
 
 # ---------------------------------------------------------------------------
 # PYTHONPATH  (Hydride codegen-generator, MISAAL lib, bitsimd ISA)
@@ -323,7 +360,10 @@ export PYTHONPATH="\$_CG/tools/low-level-codegen:\$_CG/tools/rosette-lifter:\$PY
 export PYTHONPATH="\$_CG/tools/similarity-checker:\$_CG/tools/validity-checker:\$PYTHONPATH"
 export PYTHONPATH="\$_CG/tools/transformations-verifier:\$_CG/tools/llvmlite:\$PYTHONPATH"
 export PYTHONPATH="\$_CG/tools/fuzzer:\$PYTHONPATH"
-export PYTHONPATH="\$_CG/targets/bitsimd:\$PYTHONPATH"
+# All four target dirs are needed, not just bitsimd: the synthesizer
+# (code-synthesizer/dsl-ir/synthesizer/SynthesizerBase.py) imports
+# ARMLegalInst and friends unconditionally.
+export PYTHONPATH="\$_CG/targets/bitsimd:\$_CG/targets/arm:\$_CG/targets/x86:\$_CG/targets/hexagon:\$PYTHONPATH"
 export PYTHONPATH="\$HYDRIDE_ROOT/code-synthesizer/dsl-ir:\$PYTHONPATH"
 export PYTHONPATH="\$MISAAL_SRC/lib:\$PYTHONPATH"
 export PYTHONPATH="\$PIM_ISA_ROOT/parser:\$PIM_ISA_ROOT/gen:\$PIM_ISA_ROOT/perf_cost_model:\$PYTHONPATH"
@@ -346,6 +386,7 @@ main() {
     check_prereqs
     init_submodules
     [ "$SKIP_HALIDE" -eq 1 ] || build_halide
+    build_egglog
     [ "$SKIP_SIM"    -eq 1 ] || build_libpimeval
     stage_libpimsim
     write_env

@@ -36,7 +36,8 @@ PIM-AutoDSE/                  simulator, benchmarks, ISA, DSE
 ├── benchmarks/               one tree, retargeted by config file
 ├── dse/                      design space exploration sweeps
 ├── MISAAL/        submodule  Halide-based compiler targeting the simulator
-└── Hydride/       submodule  Rose / Rosette IR framework
+├── Hydride/       submodule  Rose / Rosette IR framework
+└── egglog/        submodule  equality saturation engine (pinned to 14542d7)
 ```
 
 ```
@@ -87,6 +88,7 @@ take **hours**. Use `--dry-run` first to see the plan.
 | GCC / G++ | C++17 | AVX-512 used by the benchmark harness |
 | Python | ≥ 3.8 | `pip install -r requirements.txt` |
 | Git LFS | any | Required for the ISA lowering headers (~190 MB) |
+| Rust / cargo | any | Builds egglog, the equality-saturation engine |
 | Racket + Rosette | optional | Only to *regenerate* the ISA; the release ships pre-generated artifacts |
 
 ## Selecting a hardware target

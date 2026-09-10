@@ -9,6 +9,7 @@ depends on the components below.
 |---|---|---|---|
 | **MISAAL** | https://github.com/RafaeNoor/MISAAL | Apache-2.0 | branch `pim-fused` |
 | **Hydride** | https://github.com/akothen/Hydride | see upstream | branch `bitserial` |
+| **egglog** | https://github.com/egraphs-good/egglog | MIT | commit `14542d7` |
 
 MISAAL in turn vendors **Halide** (MIT, © 2012–2020 MIT CSAIL, Google,
 Facebook, Adobe, NVIDIA and other contributors) under
@@ -58,7 +59,6 @@ here.
 |---|---|---|
 | **LLVM** 12–15 | Required by Halide | Apache-2.0 with LLVM exceptions |
 | **Racket / Rosette** | ISA regeneration only | MIT / LGPL |
-| **egglog** | Equality saturation | MIT |
 | **OpenTuner** | DSE search | MIT |
 | **DRAMsim3** | DRAM timing model, via PIMeval | MIT |
 
