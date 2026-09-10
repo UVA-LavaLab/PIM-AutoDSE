@@ -105,6 +105,43 @@ the long-form per-instruction breakdown.
 A run that exits cleanly but emits no `PIM Command Stats` block is reported,
 not silently dropped.
 
+## Threading and `test/stubs.cpp`
+
+libpimeval runs its simulation on a thread pool sized to the host by default
+(`Number of Threads = 32` on a 32-core machine). **Multi-threaded is the
+default and is what you want** - it is verified correct at 1, 8 and 32
+threads, all producing identical results.
+
+To pin the thread count (for determinism or to limit load):
+
+```sh
+# in the .cfg
+max_num_threads = 1
+# or in the environment
+PIMEVAL_MAX_NUM_THREADS=1 make axpy
+```
+
+`test/stubs.cpp` is **not linked**, deliberately. It no-ops the whole pthread
+API to force single-threaded execution, but:
+
+1. It does not stub `pthread_create`, so libpimeval still starts its thread
+   pool while every mutex, condvar and TLS call is a no-op - a data race.
+2. Its `pthread_once` returns without running the initialiser. libstdc++
+   initialises the locale lazily through `pthread_once`, and a definition in
+   the executable interposes on the one libstdc++ itself calls. The locale
+   globals are therefore never constructed, and the first `std::ifstream` -
+   reached from `pimCreateDeviceFromConfig` via `pimUtils::readFileContent` -
+   segfaults inside `std::ctype<char>::ctype`.
+
+Point 2 explains a long-standing puzzle: switching libpimeval's output from
+`std::cout` to `printf` appeared to fix crashes. `printf` never touches
+`std::locale`, so it removed those crash sites - but it treated the symptom.
+Any remaining stream (the config-file `ifstream`) still crashed. Verified
+directly: with the broken `pthread_once`, a `printf`-only program exits 0
+while `std::ifstream` and `std::cout` both segfault.
+
+Use `max_num_threads` for single-threaded runs instead of the stubs.
+
 ## Benchmarks
 
 `tensor_add`, `axpy`, `relu`, `gemv_v1`, `gemv_v2`, `gemv_v3`, `gemm_small`,

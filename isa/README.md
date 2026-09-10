@@ -154,7 +154,7 @@ python3 gen/GenRewriteRules.py # synthesize -> rewrite_rules/
 ## Provenance
 
 This code is vendored from the `codegen-generator/targets/DRAM_BitSIMD` tree of
-[PiMCOM](https://github.com/RafaeNoor/PiMCOM), which is authoritative for
+PiMCOM (`github.com/RafaeNoor/PiMCOM` - **not currently public**), which is authoritative for
 bitsimd. A parallel copy exists in the MISAAL submodule at
 `targets/pim_fused/codegen-generator/`; where the two differ, **this copy
 wins** — it carries the DRAM-command event counters (`evt_act`, `evt_pre`,

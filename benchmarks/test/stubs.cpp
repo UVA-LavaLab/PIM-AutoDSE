@@ -1,3 +1,10 @@
+// UNUSED - not linked by the benchmark Makefile. See the note next to
+// LDFLAGS_COMMON there for why. Kept for reference only.
+//
+// If you do link it, note that pthread_once below must run its initialiser:
+// a bare `return 0` leaves libstdc++'s locale unconstructed and the first
+// std::ifstream segfaults inside std::ctype<char>::ctype.
+
 extern "C" {
     int pthread_mutex_lock(void *p) {
         return 0;
@@ -6,6 +13,9 @@ extern "C" {
         return 0;
     }
     int pthread_once(void *p, void (*f)(void)) {
+        // Must actually run the initialiser exactly once - see header note.
+        int *done = (int *)p;
+        if (done && !*done) { *done = 1; if (f) f(); }
         return 0;
     }
     void *pthread_getspecific(unsigned int a) {

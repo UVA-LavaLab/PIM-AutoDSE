@@ -8,7 +8,7 @@ depends on the components below.
 | Component | Upstream | License | Pinned to |
 |---|---|---|---|
 | **MISAAL** | https://github.com/RafaeNoor/MISAAL | Apache-2.0 | branch `pim-fused` |
-| **Hydride** | https://github.com/AkashIwnK/Hydride | see upstream | branch `bitserial` |
+| **Hydride** | https://github.com/akothen/Hydride | see upstream | branch `bitserial` |
 
 MISAAL in turn vendors **Halide** (MIT, © 2012–2020 MIT CSAIL, Google,
 Facebook, Adobe, NVIDIA and other contributors) under
@@ -20,7 +20,7 @@ Facebook, Adobe, NVIDIA and other contributors) under
 ### bitsimd ISA enumerator — `isa/`
 
 Copied from `codegen-generator/targets/DRAM_BitSIMD` of
-[PiMCOM](https://github.com/RafaeNoor/PiMCOM), which is authoritative for
+PiMCOM (`github.com/RafaeNoor/PiMCOM` - **not currently public**), which is authoritative for
 bitsimd. PiMCOM is itself derived from Hydride's `codegen-generator`.
 
 > **Action required before release:** PiMCOM carries no LICENSE file and no

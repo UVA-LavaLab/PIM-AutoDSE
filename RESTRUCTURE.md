@@ -16,7 +16,7 @@ Three repositories, one checkout:
 |---|---|---|
 | Hardware simulator (`libpimeval`) | PIM-AutoDSE | in-repo |
 | bitsimd ISA codegen + lowering | PiMCOM `codegen-generator/targets/DRAM_BitSIMD` | **vendored** (copy-in) |
-| Rose / Rosette IR framework | `AkashIwnK/Hydride` @ `bitserial` | submodule |
+| Rose / Rosette IR framework | `akothen/Hydride` @ `bitserial` | submodule |
 | Halide compiler + frontend | `RafaeNoor/MISAAL` @ `pim-fused` | submodule |
 
 PiMCOM is *not* a submodule — its bitsimd tree is copied in once and PiMCOM

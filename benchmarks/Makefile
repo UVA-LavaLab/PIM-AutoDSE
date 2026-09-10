@@ -19,9 +19,24 @@
 
 # --- Toolchain (from env.sh; overridable) ----------------------------------
 HALIDE_DISTRIB ?= $(error HALIDE_DISTRIB is not set - run: source ../env.sh)
-HALIDE_DIR     ?= $(HALIDE_DISTRIB)
-LLVM_ROOT      ?= $(LLVM_DIS_ROOT)
-CC             ?= g++
+
+# Use conditionals rather than `?=` for the fallbacks below: `?=` only assigns
+# when a variable is *undefined*, so an exported-but-empty HALIDE_DIR (easy to
+# produce by accident) would stay empty and the generator would fail at run
+# time with "libHalide.so: cannot open shared object file".
+ifeq ($(strip $(HALIDE_DIR)),)
+  HALIDE_DIR := $(HALIDE_DISTRIB)
+endif
+ifeq ($(strip $(LLVM_ROOT)),)
+  LLVM_ROOT := $(LLVM_DIS_ROOT)
+endif
+ifeq ($(strip $(LLVM_ROOT)),)
+  $(error LLVM_ROOT/LLVM_DIS_ROOT is not set - run: source ../env.sh)
+endif
+# NOTE: use CXX, not CC. `CC` is a make built-in that defaults to `cc`, so
+# `CC ?= g++` never takes effect and the C compiler gets used for C++ -
+# which fails at link time with "DSO missing from command line" on libstdc++.
+CXX            ?= g++
 
 BENCH_ROOT     := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 CONFIG_DIR     := $(BENCH_ROOT)/configs
@@ -86,6 +101,23 @@ CXXFLAGS_COMMON = -DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS --std=c++17 \
 
 LDFLAGS_COMMON  = -L ./libpimsim/ -lpimeval
 
+# NOTE: test/stubs.cpp is deliberately NOT linked.
+#
+# It no-ops the pthread API to force single-threaded simulation, but it does
+# not stub pthread_create - so libpimeval still spins up its thread pool while
+# every mutex, condvar and TLS call becomes a no-op, which is a data race.
+# Its pthread_once also returns without running the initialiser, which leaves
+# libstdc++'s locale globals unconstructed; the first std::ifstream (reached
+# from pimCreateDeviceFromConfig via pimUtils::readFileContent) then segfaults
+# inside std::ctype<char>::ctype. printf-based output hides this, streams do
+# not - which is why switching libpimeval from std::cout to printf appeared to
+# fix it.
+#
+# For single-threaded determinism use the supported knob instead:
+#     max_num_threads = 1        in the .cfg, or
+#     PIMEVAL_MAX_NUM_THREADS=1  in the environment
+
+
 .PHONY: clean all list check-env $(benchmarks)
 
 all: $(benchmarks)
@@ -106,7 +138,7 @@ $(benchmarks): %: %/bin check-env
 	@echo "==> $@  [config=$(CONFIG) mode=$(MODE)]"
 
 #	1. Build the Halide generator
-	$(CC) --std=c++17 -fno-rtti -O3 -DLOG2VLEN=7 \
+	$(CXX) --std=c++17 -fno-rtti -O3 -DLOG2VLEN=7 \
 		-I $(HALIDE_DISTRIB)/include -I $(HALIDE_DISTRIB)/tools \
 		-g $@/src/$@_generator.cpp $(HALIDE_DISTRIB)/tools/GenGen.cpp \
 		$(hannk) \
@@ -142,16 +174,16 @@ ifeq ($(ENABLE_HYDRIDE),1)
 	python3 $(COMMON_DIR)/fix_type_decl.py $@
 
 #	5. Compute-profiling binary (fused or unfused lowering)
-	$(CC) -DPROFILE_COMPUTE=1 $(FUSION_DEFINE) -Dbenchmark_$@ \
+	$(CXX) -DPROFILE_COMPUTE=1 $(FUSION_DEFINE) -Dbenchmark_$@ \
 		$(CXXFLAGS_COMMON) -I ./$@/bin \
-		test/run.cpp test/stubs.cpp $@/bin/$@.halide_generated.cpp \
+		test/run.cpp $@/bin/$@.halide_generated.cpp \
 		$(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
 		-o $@/bin/$@_compute_run.out
 
 #	6. Data-movement-profiling binary (compute suppressed)
-	$(CC) -DPROFILE_DATA_MOVEMENT=1 -Dbenchmark_$@ \
+	$(CXX) -DPROFILE_DATA_MOVEMENT=1 -Dbenchmark_$@ \
 		$(CXXFLAGS_COMMON) -I ./$@/bin \
-		test/run.cpp test/stubs.cpp $@/bin/$@.halide_generated.cpp \
+		test/run.cpp $@/bin/$@.halide_generated.cpp \
 		$(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
 		-o $@/bin/$@_data_movement_run.out
 
@@ -162,9 +194,9 @@ ifeq ($(ENABLE_HYDRIDE),1)
 endif
 
 ifeq ($(ENABLE_HYDRIDE),0)
-	$(CC) -DPROFILE_COMPUTE=1 -Dbenchmark_$@ \
+	$(CXX) -DPROFILE_COMPUTE=1 -Dbenchmark_$@ \
 		$(CXXFLAGS_COMMON) -I ./$@/bin \
-		test/run.cpp test/stubs.cpp $@/bin/$@.halide_generated.cpp \
+		test/run.cpp $@/bin/$@.halide_generated.cpp \
 		$(LDFLAGS_COMMON) $@/bin/halide_runtime_x86.o \
 		-o $@/bin/$@_compute_run.out
 endif

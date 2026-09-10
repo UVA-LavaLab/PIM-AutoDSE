@@ -151,14 +151,28 @@ EOF
     # Halide's Makefile falls back to $(HYDRIDE_ROOT)/frontends/halide/llvm-build
     # for llvm-config; we pass LLVM_CONFIG explicitly so that default is unused,
     # but HYDRIDE_ROOT still names the Hydride checkout.
+    #
+    # Build the library target, NOT `distrib`. `distrib` is
+    #     distrib: $(DISTRIB_DIR)/lib/libHalide.$(SHARED_EXT) autoschedulers
+    # and the adams2019 autoscheduler does not build in this fork: its
+    # cost_model.generator runs the MISAAL codegen path ("MIS enabled") and
+    # emits a struct initializer that an assertions-enabled LLVM 12 rejects:
+    #     Assertion `V[I]->getType() == ST->getTypeAtIndex(I) &&
+    #                "Initializer for struct element doesn't match!"' failed.
+    # The autoschedulers are stock Halide features and are not used by the PIM
+    # benchmark flow, which needs libHalide plus the headers and tools.
     ( cd "$halide_src" \
         && HYDRIDE_ROOT="$PIM_AUTODSE_ROOT/Hydride" \
            LLVM_CONFIG="$llvm_config" \
-           make -j"$JOBS" distrib )
+           make -j"$JOBS" distrib/lib/libHalide.so )
 
     [ -f "$halide_src/distrib/lib/libHalide.so" ] \
         || die "Halide build finished but distrib/lib/libHalide.so is missing"
-    log "Halide distrib built at $halide_src/distrib"
+    for needed in include/Halide.h tools/GenGen.cpp; do
+        [ -e "$halide_src/distrib/$needed" ] \
+            || die "Halide distrib incomplete: missing $needed"
+    done
+    log "Halide built at $halide_src/distrib"
 }
 
 # ---------------------------------------------------------------------------
