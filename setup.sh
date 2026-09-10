@@ -166,12 +166,60 @@ EOF
 # ---------------------------------------------------------------------------
 build_libpimeval() {
     log "Building libpimeval"
-    ( cd "$PIM_AUTODSE_ROOT" && make -j"$JOBS" -C libpimeval )
 
-    local lib
-    lib="$(find "$PIM_AUTODSE_ROOT/libpimeval" -name 'libpimeval.a' -print -quit 2>/dev/null || true)"
-    [ -n "$lib" ] || die "libpimeval.a not produced"
+    # Pass the `perf` goal EXPLICITLY. libpimeval's Makefile gates its
+    # optimisation flags on $(MAKECMDGOALS):
+    #     ifeq ($(MAKECMDGOALS),perf)
+    #         CXXFLAGS += $(CXXFLAGS_PERF)   # -O3
+    # With a bare `make`, MAKECMDGOALS is empty, so .DEFAULT_GOAL still builds
+    # the `perf` target but the -O3 flags are never added - you get an
+    # unoptimised simulator that silently runs far slower.
+    ( cd "$PIM_AUTODSE_ROOT" && make -j"$JOBS" -C libpimeval perf )
+
+    # Symlink libpimeval.h into libpimeval/include/
+    ( cd "$PIM_AUTODSE_ROOT" && make -C libpimeval create_link >/dev/null )
+
+    local lib="$PIM_AUTODSE_ROOT/libpimeval/lib/libpimeval.a"
+    [ -f "$lib" ] || die "libpimeval.a not produced at $lib"
     log "libpimeval built at $lib"
+}
+
+# ---------------------------------------------------------------------------
+# 3b. benchmarks/libpimsim - what the benchmark Makefile links against
+#
+# The Makefile compiles with `-I ./libpimsim/ -L ./libpimsim/ -lpimeval`, so
+# this directory has to hold the simulator archive, its header, and the ISA
+# lowering headers. Upstream this was a per-target copy of all of it; here it
+# is symlinks to the single built artifacts.
+# ---------------------------------------------------------------------------
+stage_libpimsim() {
+    local dst="$PIM_AUTODSE_ROOT/benchmarks/libpimsim"
+    log "Staging $dst"
+    mkdir -p "$dst"
+
+    ln_force() {
+        local target="$1" name="$2"
+        [ -e "$target" ] || return 1
+        ln -sfn "$target" "$dst/$name"
+    }
+
+    ln_force "$PIM_AUTODSE_ROOT/libpimeval/lib/libpimeval.a" libpimeval.a \
+        || die "libpimeval.a missing - did the simulator build?"
+    ln_force "$PIM_AUTODSE_ROOT/libpimeval/src/libpimeval.h" libpimeval.h \
+        || die "libpimeval.h missing"
+
+    local missing=()
+    for header in fused_lower.h unfused_lower.h get_perf_stats.h; do
+        ln_force "$PIM_AUTODSE_ROOT/isa/lowering/$header" "$header" \
+            || missing+=("$header")
+    done
+
+    if [ ${#missing[@]} -ne 0 ]; then
+        warn "ISA lowering headers not present: ${missing[*]}"
+        warn "  They live in isa/lowering/ and are tracked with Git LFS."
+        warn "  Without them the benchmarks will not compile."
+        warn "  See isa/lowering/README.md."
+    fi
 }
 
 # ---------------------------------------------------------------------------
@@ -285,6 +333,7 @@ main() {
     init_submodules
     [ "$SKIP_HALIDE" -eq 1 ] || build_halide
     [ "$SKIP_SIM"    -eq 1 ] || build_libpimeval
+    stage_libpimsim
     write_env
 
     cat <<EOF

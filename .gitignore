@@ -20,6 +20,9 @@ compile_commands.json
 # ---------------------------------------------------------------------------
 # Benchmark build products
 # ---------------------------------------------------------------------------
+# Populated by setup.sh with symlinks to the built simulator and the ISA
+# lowering headers - see stage_libpimsim().
+benchmarks/libpimsim/
 benchmarks/*/bin/
 benchmarks/logs/
 benchmarks/results/
