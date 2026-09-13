@@ -61,8 +61,8 @@ _CMD_RE = re.compile(
     r"(?P<pct_l>[-\w.]+)\s*$"
 )
 
-# "PIM-Info: Fusing 6 command groups."
-_FUSE_RE = re.compile(r"PIM-Info:\s*Fusing\s+(?P<n>\d+)\s+command groups")
+# "PIM-Info: Fusing 4 commands."  (older simulator builds: "Fusing 6 command groups.")
+_FUSE_RE = re.compile(r"PIM-Info:\s*Fusing\s+(?P<n>\d+)\s+command(?:s|\s+groups)\b")
 
 # "PIM-Info: Created PIM device with 1280 cores of 32768 rows and 1024 columns."
 _DEVICE_RE = re.compile(
@@ -71,9 +71,11 @@ _DEVICE_RE = re.compile(
 )
 
 # DRAM command event counters (present in newer builds only).
-# "TOTAL ACT: 1234"
+# "                TOTAL ACT:--------- :                      3278"
+# "            TOTAL Compute:-------- :                      1639"
+# The dashed separator and second colon are optional, so "TOTAL ACT: 1234" also matches.
 _EVENT_RE = re.compile(
-    r"^\s*TOTAL\s+(?P<key>ACT|PRE|CAS|Compute)\s*:\s*(?P<val>\d+)\s*$",
+    r"^\s*TOTAL\s+(?P<key>ACT|PRE|CAS|Compute)\s*:\s*-*\s*:?\s*(?P<val>\d+)\s*$",
     re.IGNORECASE,
 )
 
