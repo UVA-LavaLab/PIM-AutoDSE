@@ -14,38 +14,32 @@ Because both are generated from the same enumeration and linked against the
 same freshly built `libpimeval.a`, the runtime and energy delta between them is
 attributable to fusion alone.
 
-## These files are not yet in the repository
+## Git LFS
 
-They exceed GitHub's 100 MB per-file limit for ordinary blobs and must be
-tracked with Git LFS. `.gitattributes` at the repository root already declares
-the rules:
-
-```
-isa/lowering/fused_lower.h    filter=lfs diff=lfs merge=lfs -text
-isa/lowering/unfused_lower.h  filter=lfs diff=lfs merge=lfs -text
-isa/lowering/get_perf_stats.h filter=lfs diff=lfs merge=lfs -text
-```
-
-To populate the directory:
+These files are tracked with Git LFS (rules in the root `.gitattributes`).
+Install it before cloning, or the headers check out as ~130-byte pointer files
+and the build fails:
 
 ```sh
-# once per machine
-sudo apt-get install git-lfs   # or: brew install git-lfs
+sudo apt-get install git-lfs   # or: brew install git-lfs / conda install -c conda-forge git-lfs
 git lfs install
-
-# from the repository root
-cp /path/to/fused_lower.h  isa/lowering/
-cp /path/to/unfused_lower.h isa/lowering/
-cp /path/to/get_perf_stats.h isa/lowering/
-git add isa/lowering/*.h
-git commit -m "Add generated lowering interfaces (LFS)"
 ```
 
-Verify they were stored as LFS pointers rather than raw blobs before pushing:
+If you already cloned without it, run `git lfs pull` from the repository root.
 
-```sh
-git lfs ls-files
+## Compatibility typedefs
+
+Each header begins with two aliases:
+
+```c++
+using PimProg    = PimFusionBlock;
+using PimProgApi = PimApi;
 ```
+
+The headers were generated when libpimeval named its fusion-program types
+`PimProg` / `PimProgApi`; the libpimeval in this repository renamed them. The
+structs are otherwise identical, so the aliases are exact. Regenerated headers
+should use the current names instead.
 
 ## Bandwidth note
 
