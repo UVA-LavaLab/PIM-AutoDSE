@@ -1,7 +1,7 @@
 from Ops import *
 from Canonical import is_expression_canonical
 from TOMLEmitter import emit_toml_str
-from PIM_API_UTILS import PIM_PROG
+from PIM_API_UTILS import PIM_PROG, LIBPIMEVAL_COMPAT_TYPEDEFS
 import sys
 import pickle
 
@@ -229,6 +229,7 @@ def test_enumeration():
     with open("fused_lower.cpp", "w+") as CppFile:
         CppFile.write("// Automatically generated file\n")
         CppFile.write("#include \"libpimeval.h\"\n")
+        CppFile.write(LIBPIMEVAL_COMPAT_TYPEDEFS)
         CppFile.write("#include <cstdio>\n")
         CppFile.write("#ifndef VF \n")
         CppFile.write("#define VF 0\n")
@@ -237,6 +238,7 @@ def test_enumeration():
     with open("unfused_lower.cpp", "w+") as CppFile:
         CppFile.write("// Automatically generated file\n")
         CppFile.write("#include \"libpimeval.h\"\n")
+        CppFile.write(LIBPIMEVAL_COMPAT_TYPEDEFS)
         CppFile.write("#include <cstdio>\n")
         CppFile.write("#ifndef VF \n")
         CppFile.write("#define VF 0\n")
@@ -463,6 +465,7 @@ def test_enumeration_repeat():
     with open("fused_lower.cpp", "w+") as CppFile:
         CppFile.write("// Automatically generated file\n")
         CppFile.write("#include \"libpimeval.h\"\n")
+        CppFile.write(LIBPIMEVAL_COMPAT_TYPEDEFS)
         CppFile.write("#include <cstdio>\n")
         CppFile.write("#ifndef VF \n")
         CppFile.write("#define VF 0\n")
@@ -471,6 +474,7 @@ def test_enumeration_repeat():
     with open("unfused_lower.cpp", "w+") as CppFile:
         CppFile.write("// Automatically generated file\n")
         CppFile.write("#include \"libpimeval.h\"\n")
+        CppFile.write(LIBPIMEVAL_COMPAT_TYPEDEFS)
         CppFile.write("#include <cstdio>\n")
         CppFile.write("#ifndef VF \n")
         CppFile.write("#define VF 0\n")

@@ -251,8 +251,11 @@ build_lowering_libs() {
     local decl_dir="$sim_dir/decls"
     mkdir -p "$decl_dir"
 
-    local flags="-DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS --std=c++17 -O3 \
-        -march=native -mavx512vl -mavx512ifma -ffunction-sections -fdata-sections \
+    # -O0: these objects only marshal calls into the simulator, whose timing and
+    # energy model is analytical, so optimising them buys nothing but a much
+    # slower one-time compile of the ~95 MB headers.
+    local flags="-DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS --std=c++17 -O0 \
+        -march=native -mavx512vl -mavx512ifma -ffunction-sections -fdata-sections -fmax-errors=5 \
         -I $lower_dir -I $sim_dir"
 
     for mode in fused unfused; do
@@ -397,8 +400,8 @@ export PIM_CONFIG="\${PIM_CONFIG:-\$PIM_CONFIG_DIR/PIMeval_Bank_LPDDR.cfg}"
 # ---------------------------------------------------------------------------
 # egglog (equality saturation)
 #
-# NOTE: MISAAL reads this path from lib/utils/egg_config.py, which currently
-# hardcodes an absolute path. Until that reads $EGG_PKG_PATH, point it here.
+# MISAAL's lib/utils/egg_config.py reads EGG_PKG_PATH and runs
+# <EGG_PKG_PATH>/target/release/egglog.
 # ---------------------------------------------------------------------------
 export EGG_PKG_PATH="\$PIM_AUTODSE_ROOT/egglog"
 export PATH="\$EGG_PKG_PATH/target/release:\$EGG_PKG_PATH/target/debug:\$PATH"

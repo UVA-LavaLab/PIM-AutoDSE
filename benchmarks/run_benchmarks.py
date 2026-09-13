@@ -24,6 +24,7 @@ hours. Use --dry-run first to see the plan.
 from __future__ import annotations
 
 import argparse
+import re
 import os
 import shutil
 import subprocess
@@ -69,6 +70,13 @@ def available_benchmarks() -> list[str]:
 
     # Keep only those that actually have sources checked in.
     return [n for n in names if (BENCH_ROOT / n / "src").is_dir()]
+
+
+def restricted_configs() -> dict[str, set[str]]:
+    """Configs evaluated on only a subset of benchmarks (BENCHMARKS_<config> in the Makefile)."""
+    text = (BENCH_ROOT / "Makefile").read_text().replace("\\\n", " ")
+    return {m.group(1): set(m.group(2).split())
+            for m in re.finditer(r"^BENCHMARKS_([A-Za-z0-9_]+)\s*:=\s*(.*)$", text, re.M)}
 
 
 # ---------------------------------------------------------------------------
@@ -209,13 +217,21 @@ def main(argv=None) -> int:
                 print(f"error: {p}", file=sys.stderr)
             return 2
 
-    total = len(benchmarks) * len(configs) * len(modes)
+    restricted = restricted_configs()
+    allowed = {(c, b) for c in configs for b in benchmarks
+               if c not in restricted or b in restricted[c]}
+    skipped = len(configs) * len(benchmarks) - len(allowed)
+    total = len(allowed) * len(modes)
     print(f"Plan: {len(benchmarks)} benchmark(s) x {len(configs)} config(s) "
-          f"x {len(modes)} mode(s) = {total} run(s)\n")
+          f"x {len(modes)} mode(s) = {total} run(s)"
+          + (f" ({skipped} benchmark/config pair(s) not evaluated on that config)" if skipped else "")
+          + "\n")
 
     results: list[RunResult] = []
     for config in configs:
         for benchmark in benchmarks:
+            if (config, benchmark) not in allowed:
+                continue
             for mode in modes:
                 result = run_one(benchmark, config, mode,
                                  jobs=args.jobs, clean=args.clean,

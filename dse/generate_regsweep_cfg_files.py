@@ -2,11 +2,15 @@ import glob
 import itertools
 import os
 
-config_files = glob.glob(f"cfg_files/*.cfg")
+import os
 
-#RESULT_DIR="./cfg_reg_sweep_files/"
-#RESULT_DIR="./cfg_files_v2/"
-RESULT_DIR="./cfg_files_scalar_sweep/"
+# Sweep configs live under dse/cfgs/, independent of the working directory.
+CFG_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cfgs")
+config_files = glob.glob(os.path.join(CFG_ROOT, "cfg_files", "*.cfg"))
+
+#RESULT_DIR=os.path.join(CFG_ROOT, "cfg_reg_sweep_files")
+#RESULT_DIR=os.path.join(CFG_ROOT, "cfg_files_v2")
+RESULT_DIR=os.path.join(CFG_ROOT, "cfg_files_scalar_sweep")
 
 if not os.path.exists(RESULT_DIR):
     os.mkdir(RESULT_DIR)

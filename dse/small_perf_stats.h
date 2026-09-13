@@ -20,7 +20,7 @@
 */
 void comb_31_fused_pim_op_1360(void* reg_0, int64_t reg_0_num_elems, void* reg_1, int64_t reg_1_num_elems, int64_t reg_2, int64_t reg_2_num_elems, void* ret_vec, int64_t ret_vec_num_elems){
 
-	PimProg prog;
+	PimFusionBlock prog;
 	// Emitting Allocations
 	PimObjId fuse_root = pimAlloc(PIM_ALLOC_AUTO, ret_vec_num_elems, PIM_INT32);
 	PimObjId fuse_expr_1 = pimAllocAssociated(fuse_root, PIM_INT32);
@@ -81,7 +81,7 @@ delete[] ret_val;
 */
 void comb_15_fused_pim_op_0(int64_t reg_0, int64_t reg_0_num_elems, void* ret_vec, int64_t ret_vec_num_elems){
 
-	PimProg prog;
+	PimFusionBlock prog;
 	// Emitting Allocations
 	PimObjId fuse_root = pimAlloc(PIM_ALLOC_AUTO, ret_vec_num_elems, PIM_INT32);
 	// Scalar operand fuse_expr_1 does not need pim allocation
@@ -127,7 +127,7 @@ delete[] ret_val;
 */
 void comb_23_fused_pim_op_1102(int64_t reg_0, int64_t reg_0_num_elems, void* reg_1, int64_t reg_1_num_elems, void* ret_vec, int64_t ret_vec_num_elems){
 
-	PimProg prog;
+	PimFusionBlock prog;
 	// Emitting Allocations
 	PimObjId fuse_root = pimAlloc(PIM_ALLOC_AUTO, ret_vec_num_elems, PIM_INT32);
 	PimObjId fuse_expr_1 = pimAllocAssociated(fuse_root, PIM_INT32);
@@ -181,7 +181,7 @@ delete[] ret_val;
 */
 void comb_27_fused_pim_op_1444(int64_t reg_0, int64_t reg_0_num_elems, void* reg_1, int64_t reg_1_num_elems, void* ret_vec, int64_t ret_vec_num_elems){
 
-	PimProg prog;
+	PimFusionBlock prog;
 	// Emitting Allocations
 	PimObjId fuse_root = pimAlloc(PIM_ALLOC_AUTO, ret_vec_num_elems, PIM_INT32);
 	PimObjId fuse_expr_1 = pimAllocAssociated(fuse_root, PIM_INT32);

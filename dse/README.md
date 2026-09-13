@@ -33,10 +33,11 @@ The full sweep configs (~1,100 generated `.cfg` files: `cfg_files/`,
 `aqbolt_cfg_files/`) are not in the repository. `generate_regsweep_cfg_files.py`
 derives the register-sweep variants from `cfg_files/`.
 
-Each references its DRAM timing `.ini` as `../benchmarks/configs/<name>.ini`.
-That path is resolved by DRAMsim3 against the **process working directory**,
-not the location of the `.cfg` — which is why these scripts must be run from
-`dse/`.
+Each references its DRAM timing `.ini` as
+`../../../benchmarks/configs/<name>.ini`. libpimeval tries that path relative
+to the working directory first and then relative to the `.cfg` file's own
+directory, so it resolves from anywhere. The scripts locate `cfgs/` relative
+to themselves; they still write their logs and CSVs to the working directory.
 
 ## Tabulating results
 

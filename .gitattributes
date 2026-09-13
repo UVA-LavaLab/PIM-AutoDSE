@@ -8,7 +8,7 @@
 # NOTE: tracking here only affects NEW commits. The large benchmark datasets
 # already present in `main`'s history still need a one-time
 #   git lfs migrate import --include="..."
-# which rewrites every SHA. See RESTRUCTURE.md phase 7.
+# which rewrites every SHA.
 # ---------------------------------------------------------------------------
 
 isa/lowering/fused_lower.h    filter=lfs diff=lfs merge=lfs -text

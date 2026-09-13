@@ -15,7 +15,7 @@
    */
 void comb_1_fused_pim_op_1(void* reg_0, int64_t reg_0_num_elems, void* ret_vec, int64_t ret_vec_num_elems){
 
-    PimProg prog;
+    PimFusionBlock prog;
     // Emitting Allocations
     PimObjId fuse_root = pimAlloc(PIM_ALLOC_AUTO, reg_0_num_elems, PIM_INT16);
     PimObjId fuse_expr_0 = pimAllocAssociated(fuse_root, PIM_INT8);
@@ -64,7 +64,7 @@ void benchmark_comb_1_fused_pim_op_1(){
 */
 void comb_8_fused_pim_op_273(int64_t reg_0, int64_t reg_0_num_elems, void* reg_1, int64_t reg_1_num_elems, void* ret_vec, int64_t ret_vec_num_elems){
 
-	PimProg prog;
+	PimFusionBlock prog;
 	// Emitting Allocations
 	PimObjId fuse_root = pimAlloc(PIM_ALLOC_AUTO, reg_0_num_elems, PIM_INT16);
 	PimObjId fuse_expr_0 = pimAllocAssociated(fuse_root, PIM_BOOL);

@@ -86,6 +86,12 @@ VF_relu            := 16777216
 VF_gemm_medium     := 33554432
 VF_gemm_large      := 67108864
 
+# Configs evaluated on only a subset of benchmarks. Anything not listed runs
+# every benchmark.
+BENCHMARKS_Aquabolt := axpy convolution gemm_small gemm_medium gemm_large \
+                       gemv_v1 gemv_v2 gemv_v3 relu
+config_benchmarks    = $(or $(BENCHMARKS_$(CONFIG)),$(benchmarks))
+
 VF            ?=
 bench_vf       = $(or $(VF),$(VF_$(1)),$(error no VF defined for benchmark $(1)))
 COST_CSV_ROOT ?= $(abspath $(BENCH_ROOT)/../isa/perf_cost_model/perf_logs)
@@ -158,11 +164,12 @@ LDFLAGS_COMMON  = -L ./libpimsim/ -lpimeval -Wl,--gc-sections
 
 .PHONY: clean all list check-env $(benchmarks)
 
-all: $(benchmarks)
+all: $(config_benchmarks)
 
 list:
 	@echo "Benchmarks (VF):"; $(foreach b,$(benchmarks),printf '  %-18s %s\n' $(b) $(call bench_vf,$(b));)
 	@echo "Configs:";    ls $(CONFIG_DIR)/*.cfg | xargs -n1 basename | sed 's/\.cfg$$//' | sed 's/^/  /'
+	@echo "Aquabolt runs only: $(BENCHMARKS_Aquabolt)"
 
 check-env:
 	@test -n "$(HALIDE_DISTRIB)" || { echo "HALIDE_DISTRIB unset - run: source ../env.sh"; exit 1; }
@@ -173,6 +180,8 @@ check-env:
 # Build + run one benchmark for the selected (CONFIG, MODE)
 # ---------------------------------------------------------------------------
 $(benchmarks): %: %/bin check-env
+	@case " $(config_benchmarks) " in *" $@ "*) ;; *) \
+	  echo "error: $@ is not evaluated on $(CONFIG); supported: $(config_benchmarks)" >&2; exit 1;; esac
 	@echo "==> $@  [config=$(CONFIG) mode=$(MODE) vf=$(call bench_vf,$@)]"
 
 #	1. Build the Halide generator

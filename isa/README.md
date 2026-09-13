@@ -93,11 +93,11 @@ Alongside the pseudocode, two C++ interfaces to the simulator are emitted.
 
 `fused_lower.h` instructs the simulator to model the operation **with** the
 optimizations fusion affords — the whole expression is submitted as one
-`PimProg` and closed with `pimFuse`, so intermediates stay inside the PIM unit:
+`PimFusionBlock` and closed with `pimFuse`, so intermediates stay inside the PIM unit:
 
 ```c++
 void comb_16_fused_pim_op_70(void* reg_0, int64_t reg_0_num_elems, ...) {
-    PimProg prog;
+    PimFusionBlock prog;
     PimObjId fuse_root   = pimAlloc(PIM_ALLOC_AUTO, reg_0_num_elems, PIM_INT8);
     PimObjId fuse_expr_0 = pimAllocAssociated(fuse_root, PIM_BOOL);
     ...

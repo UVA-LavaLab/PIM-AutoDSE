@@ -21,10 +21,6 @@ high-level languages to diverse PIM architectures; and adds a methodology for
 synthesizing PIM ISAs from pseudocode to produce RISC- and CISC-like ISAs
 automatically.
 
-Using it, we present the first systematic study of instruction fusion for PIM,
-showing up to **2.7× improvement in runtime and energy** over non-fused
-baselines.
-
 ## Architecture
 
 Three repositories cooperate; two arrive as submodules.
@@ -73,7 +69,6 @@ source env.sh
 cd benchmarks
 python3 run_benchmarks.py --list
 python3 run_benchmarks.py --benchmark axpy --config PIMeval_Bank_LPDDR
-python3 run_benchmarks.py --all --csv ../results/sweep.csv
 ```
 
 A full sweep compiles and simulates every benchmark × config × mode and can
@@ -126,7 +121,6 @@ totals.
 - [`isa/README.md`](isa/README.md) — how the ISA is enumerated and lowered
 - [`benchmarks/README.md`](benchmarks/README.md) — building and running benchmarks
 - [`dse/README.md`](dse/README.md) — design space exploration sweeps
-- [`RESTRUCTURE.md`](RESTRUCTURE.md) — release engineering notes and open items
 
 ## Citation
 

@@ -9,6 +9,15 @@ import sys
 import os
 import pandas as pd
 
+# Written right after `#include "libpimeval.h"` in the generated lowering files.
+# The generated code uses libpimeval's current PimFusionBlock / PimApi; these
+# aliases keep code written against the earlier PimProg / PimProgApi names
+# compiling. The structs are otherwise identical, so the aliases are exact.
+LIBPIMEVAL_COMPAT_TYPEDEFS = (
+    "using PimProg    = PimFusionBlock;\n"
+    "using PimProgApi = PimApi;\n"
+)
+
 PIM_ALLOC_NAME = "pimAlloc"
 PIM_ALIGNED_ALLOC_NAME = "pimAllocAssociated"
 PIM_COPY_TO_DEVICE_NAME = "pimCopyHostToDevice"
@@ -842,7 +851,7 @@ class PIM_PROG:
 
         prototype = f"void {self.func_name}({join_opnds})"
 
-        stmts = ["", f"PimProg {self.prog_name};"]
+        stmts = ["", f"PimFusionBlock {self.prog_name};"]
 
         stmts += self.emit_allocations()
         stmts += self.emit_copy_to_device()

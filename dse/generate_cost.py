@@ -7,10 +7,13 @@ import sys
 pim_eval_path = os.environ.get("PIM_EVAL_ROOT", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "libpimeval"))
 
 
+# Sweep configs live under dse/cfgs/, independent of the working directory.
+CFG_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cfgs")
+
 config_files = []
-#config_files += glob.glob(f"cfg_files_v2/*.cfg")
-#config_files += glob.glob("cfg_reg_sweep_files/*.cfg")
-config_files += glob.glob("./cfg_files_scalar_sweep/*.cfg")
+#config_files += glob.glob(os.path.join(CFG_ROOT, "cfg_files_v2", "*.cfg"))
+#config_files += glob.glob(os.path.join(CFG_ROOT, "cfg_reg_sweep_files", "*.cfg"))
+config_files += glob.glob(os.path.join(CFG_ROOT, "cfg_files_scalar_sweep", "*.cfg"))
 print("Config Files", config_files)
 
 

@@ -9,6 +9,9 @@ from PIM_API_UTILS import PimDeviceEnum
 
 import concurrent.futures
 
+# Sweep configs live under dse/cfgs/, independent of the working directory.
+CFG_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cfgs")
+
 def evaluate_benchmark(benchmark_name, VF, cfg_file_path, log_path):
 
     cfg = {
@@ -48,7 +51,7 @@ if __name__ == "__main__":
     #benchmarks = ["relu", "histogram", "axpy", "filter_by_key", "gemv_v1", "gemv_v2", "gemv_v3", "gemm_small","radix_sort"]
     benchmarks = ["softmax", "convolution"]
     VFS = [1024]
-    CFG_FILES = glob.glob("./autodse_eval_cfgs/*.cfg")
+    CFG_FILES = glob.glob(os.path.join(CFG_ROOT, "autodse_eval_cfgs", "*.cfg"))
 
     TESTS = [
         #"bank-simd_mem-ddr_ranks-20_banks-32_subarr-32_rows-1024_cols-2048",

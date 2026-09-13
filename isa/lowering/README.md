@@ -5,7 +5,7 @@ against:
 
 | File | Size | Role |
 |---|---|---|
-| `fused_lower.h` | ~98 MB | Each CISC instruction submitted as one `PimProg` closed with `pimFuse` — intermediates stay inside the PIM unit |
+| `fused_lower.h` | ~98 MB | Each CISC instruction submitted as one `PimFusionBlock` closed with `pimFuse` — intermediates stay inside the PIM unit |
 | `unfused_lower.h` | ~94 MB | The same instructions without fusion; every intermediate spills to the DRAM array, costing an ACTIVATE/PRECHARGE pair |
 | `get_perf_stats.h` | ~1.6 MB | Stats-collection helpers shared by both |
 
@@ -38,8 +38,9 @@ using PimProgApi = PimApi;
 
 The headers were generated when libpimeval named its fusion-program types
 `PimProg` / `PimProgApi`; the libpimeval in this repository renamed them. The
-structs are otherwise identical, so the aliases are exact. Regenerated headers
-should use the current names instead.
+structs are otherwise identical, so the aliases are exact. `isa/gen` emits the
+current names and writes the same aliases into regenerated headers
+(`LIBPIMEVAL_COMPAT_TYPEDEFS` in `PIM_API_UTILS.py`).
 
 ## Bandwidth note
 
