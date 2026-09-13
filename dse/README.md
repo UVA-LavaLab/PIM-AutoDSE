@@ -56,17 +56,15 @@ configuration cannot be parsed.
 > which parses the same logs without needing the tuner dependencies and emits
 > a richer schema.
 
-## Published results
+## Results
 
-`../results/` holds the CSVs behind the paper's figures:
-`gemm_small_dse.csv`, `gemv_v1_dse.csv`, `histogram_dse.csv`,
-`histogram_energy_opt_dse.csv`, `histogram_perf_opt_dse.csv`,
-`aqbolt_gemv_v1_dse.csv`.
+`../results/` is a local output directory for sweep and benchmark CSVs. It is
+gitignored: write results there, but they are not committed.
 
 ## A note on provenance
 
 These were recovered from a 5.9 GB working directory that mixed source with
 run artifacts — roughly 200 `.egg` solver dumps, ~90 MB simulator logs per run,
-55 MB compiled binaries, and per-run work directories. Only the scripts,
-configurations and result CSVs are kept here; `.gitignore` at the repository
+55 MB compiled binaries, and per-run work directories. Only the scripts and the evaluation
+configurations are kept here; `.gitignore` at the repository
 root excludes the artifact patterns so they do not creep back in.

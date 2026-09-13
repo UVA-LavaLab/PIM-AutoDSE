@@ -111,3 +111,10 @@ benchmarks/libpimsim/decls/
 # ---------------------------------------------------------------------------
 dse/cfgs/*
 !dse/cfgs/autodse_eval_cfgs/
+
+# ---------------------------------------------------------------------------
+# results/ is a local output directory for sweep CSVs - nothing in it is
+# committed except the placeholder that keeps the directory in the checkout.
+# ---------------------------------------------------------------------------
+results/*
+!results/.gitkeep
