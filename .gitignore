@@ -103,3 +103,11 @@ log
 benchmarks/libpimsim/*_lib.o
 benchmarks/libpimsim/*_lib.cpp
 benchmarks/libpimsim/decls/
+
+# ---------------------------------------------------------------------------
+# Generated DSE sweep configs (~1,100 files). Kept locally, not in the repo;
+# regenerate with dse/generate_regsweep_cfg_files.py. The five evaluation
+# configs in dse/cfgs/autodse_eval_cfgs/ stay tracked.
+# ---------------------------------------------------------------------------
+dse/cfgs/*
+!dse/cfgs/autodse_eval_cfgs/
