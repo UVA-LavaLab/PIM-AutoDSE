@@ -51,6 +51,14 @@ def log(msg):
         print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)
 
 
+def rel(path):
+    """Path relative to the repo root for display, or absolute if outside it."""
+    try:
+        return path.relative_to(REPO_ROOT)
+    except ValueError:
+        return path
+
+
 def fmt_duration(seconds):
     seconds = int(seconds)
     h, rem = divmod(seconds, 3600)
@@ -94,22 +102,36 @@ def cost_model_pairs(configs=None, exclude=None, only_vfs=None, max_vf=None):
 
 
 def generate(pair):
+    """Generate one CSV. Never raises: any failure is reported and returned as a
+    nonzero code so the remaining pairs keep running."""
     cfg, vf = pair
     name = f"{cfg.stem} VF={vf}"
-    if csv_path(cfg, vf).exists():
-        log(f"exists    {name}")
-        return pair, 0, 0.0
-    log_file = LOG_DIR / f"{cfg.stem}_vf{vf}.log"
-    log(f"start     {name}  (log: {log_file.relative_to(REPO_ROOT)})")
-    cmd = [sys.executable, "-u", str(ENSURE), "--config", str(cfg), "--vf", str(vf),
-           "--out-dir", str(OUT_DIR)]
     start = time.time()
-    with open(log_file, "w") as out:
-        rc = subprocess.call(cmd, stdout=out, stderr=subprocess.STDOUT)
-    elapsed = time.time() - start
-    log(f"{'done' if rc == 0 else 'FAILED':<9} {name}  ({fmt_duration(elapsed)}"
-        f"{'' if rc == 0 else f', exit {rc}, see {log_file.relative_to(REPO_ROOT)}'})")
-    return pair, rc, elapsed
+    try:
+        if csv_path(cfg, vf).exists():
+            log(f"exists    {name}")
+            return pair, 0, 0.0
+        log_file = LOG_DIR / f"{cfg.stem}_vf{vf}.log"
+        log(f"start     {name}  (log: {rel(log_file)})")
+        cmd = [sys.executable, "-u", str(ENSURE), "--config", str(cfg), "--vf", str(vf),
+               "--out-dir", str(OUT_DIR)]
+        with open(log_file, "w") as out:
+            rc = subprocess.call(cmd, stdout=out, stderr=subprocess.STDOUT)
+        elapsed = time.time() - start
+        if rc == 0 and not csv_path(cfg, vf).exists():
+            rc = 1
+            reason = f"exited 0 but wrote no CSV, see {rel(log_file)}"
+        else:
+            reason = f"exit {rc}, see {rel(log_file)}"
+        if rc == 0:
+            log(f"done      {name}  ({fmt_duration(elapsed)})")
+        else:
+            log(f"FAILED    {name}  ({fmt_duration(elapsed)}, {reason})")
+        return pair, rc, elapsed
+    except Exception as exc:
+        elapsed = time.time() - start
+        log(f"FAILED    {name}  ({fmt_duration(elapsed)}, {type(exc).__name__}: {exc})")
+        return pair, -1, elapsed
 
 
 def main(argv=None):
@@ -160,7 +182,7 @@ def main(argv=None):
         print(f"{cfg.stem:<26} {vf:>9}  {status:<8} {fmt_duration(elapsed) if elapsed else '-'}")
     print()
     print(f"{len(pairs) - len(failed)}/{len(pairs)} cost models ready in "
-          f"{OUT_DIR.relative_to(REPO_ROOT)} (total {fmt_duration(time.time() - start)})")
+          f"{rel(OUT_DIR)} (total {fmt_duration(time.time() - start)})")
     if failed:
         print("failed: " + ", ".join(f"{c.stem} VF={v}" for c, v in failed), file=sys.stderr)
     return 1 if failed else 0
