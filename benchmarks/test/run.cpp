@@ -22,8 +22,6 @@
 #include "gemv_v2.h"
 #elif benchmark_gemv_v3
 #include "gemv_v3.h"
-#elif benchmark_batched_gemm_v1
-#include "batched_gemm_v1.h"
 #elif benchmark_gemm_medium
 #include "gemm_medium.h"
 #elif benchmark_gemm_small
@@ -624,52 +622,6 @@ int main(int argc, char **argv) {
 
 
 
-
-#if benchmark_batched_gemm_v1
-
-
-  int B = 2;
-  int M = 1024;
-  int N = 1024;
-  int K = 1024;
-
-  halide_dimension_t b_dim_A{0, B, M * K};
-  halide_dimension_t x_dim_A{0, M, 1};
-  halide_dimension_t y_dim_A{0, K, M};
-  halide_dimension_t shape_A[3] = {b_dim_A, x_dim_A, y_dim_A};
-  int32_t* matAptr = (int32_t*) malloc(sizeof(int32_t) * M * K * B);
-  Halide::Runtime::Buffer<int32_t> matA((int32_t *)matAptr, 3, shape_A);
-
-
-  halide_dimension_t b_dim_B{0, B, K*N};
-  halide_dimension_t x_dim_B{0, K, 1};
-  halide_dimension_t y_dim_B{0, N, K};
-  halide_dimension_t shape_B[3] = {b_dim_B, x_dim_B, y_dim_B};
-  int32_t* matBptr = (int32_t*) malloc(sizeof(int32_t) * N * K * B);
-  Halide::Runtime::Buffer<int32_t> matB((int32_t *)matBptr, 3, shape_B);
-
-
-
-
-  halide_dimension_t b_dim_O{0, B, M * N};
-  halide_dimension_t x_dim_O{0, M, 1};
-  halide_dimension_t y_dim_O{0, N, M};
-  halide_dimension_t shape_O[3] = {b_dim_O, x_dim_O, y_dim_O};
-  int32_t* matOptr = (int32_t*) malloc(sizeof(int32_t) * N * M * B);
-  Halide::Runtime::Buffer<int32_t> output_buf((int32_t *)matOptr, 3, shape_O);
-
-  benchmark([&]() {
-    printf("Launching batched_gemm_v1\n");
-    int error = batched_gemm_v1(matA, matB, output_buf);
-    if (error != 0) {
-      printf("batched_gemm_v1 pipeline failed: %d\n", error);
-    }
-  });
-
-  free(matAptr);
-  free(matBptr);
-  free(matOptr);
-#endif
 
 #if benchmark_histogram
   int width = 8192;

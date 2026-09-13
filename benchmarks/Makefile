@@ -68,18 +68,14 @@ LOG_DIR := $(LOG_ROOT)/$(CONFIG)
 # VF is each benchmark's vectorization factor, taken from the vectorize() call
 # in its generator (<bench>/src/<bench>_generator.cpp). Override with VF=<n>.
 VF_tensor_add      := 128
-VF_max_pool        := 4
 VF_softmax         := 1024
 VF_gemv_v1         := 4096
-VF_bitsimd_gemv    := 8192
 VF_gemv_v3         := 8192
 VF_histogram       := 8192
 VF_gemv_v2         := 16384
 VF_axpy            := 65536
 VF_radix_sort      := 262144
-VF_radix_sort_i16  := 262144
 VF_filter_by_key   := 524288
-VF_batched_gemm_v1 := 2097152
 VF_convolution     := 4194304
 VF_gemm_small      := 16777216
 VF_relu            := 16777216
@@ -113,14 +109,10 @@ benchmarks = tensor_add \
              gemm_small \
              gemm_medium \
              gemm_large \
-             batched_gemm_v1 \
-             bitsimd_gemv \
              histogram \
              filter_by_key \
              convolution \
-             max_pool \
              radix_sort \
-             radix_sort_i16 \
              softmax
 
 bin_dirs = $(addsuffix /bin,$(benchmarks))

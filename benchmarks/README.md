@@ -16,7 +16,8 @@ python3 run_benchmarks.py --benchmark axpy --config PIMeval_Bank_Rank20 --mode f
 python3 run_benchmarks.py --all --csv ../results/sweep.csv
 ```
 
-A full sweep is 18 benchmarks × 6 configs × 2 modes = 216 runs and takes
+A full sweep is 14 benchmarks on 5 configs plus 9 on Aquabolt, × 2 modes =
+158 runs, and takes
 **hours**. Start with `--dry-run`.
 
 Useful flags: `--keep-going` (don't stop at the first failure), `--timeout SEC`,
@@ -117,8 +118,8 @@ not silently dropped.
 ## Benchmarks
 
 `tensor_add`, `axpy`, `relu`, `gemv_v1`, `gemv_v2`, `gemv_v3`, `gemm_small`,
-`gemm_medium`, `gemm_large`, `batched_gemm_v1`, `bitsimd_gemv`, `histogram`,
-`filter_by_key`, `convolution`, `max_pool`, `radix_sort`, `radix_sort_i16`,
+`gemm_medium`, `gemm_large`, `histogram`,
+`filter_by_key`, `convolution`, `radix_sort`,
 `softmax`.
 
 `run_benchmarks.py --list` reads this list from the Makefile, so the two cannot
