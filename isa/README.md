@@ -14,7 +14,7 @@ from simpler primitives — not loop fusion.
 
 | Path | Contents |
 |---|---|
-| `spec/` | ISA descriptions as TOML: `auto.toml` (every enumerated fused instruction, ~28 MB), the hand-written base ISA files, and `process_toml.py` |
+| `spec/` | ISA descriptions as TOML: `auto.toml` (every enumerated fused instruction, ~28 MB), and the hand-written base ISA files |
 | `gen/` | The enumerator: `Ops.py`, `Enumerator.py`, `TOMLEmitter.py`, `PIM_API_UTILS.py`, `PIM_TUNER_UTILS.py`, `GenRewriteRules.py` |
 | `rewrite_rules/` | Pre-synthesized rewrite rules (`rewrite_rules.txt`, `manual_rewrite_rules.txt`, `copy_rewrite_rules.txt`) |
 | `lowering/` | Generated `fused_lower.h` / `unfused_lower.h` — see `lowering/README.md` |
@@ -125,6 +125,15 @@ builds the harness that configures the PIM simulator, invokes each CISC
 instruction with fusion enabled and disabled, and records the metrics into a
 per-target `.csv`. The MISAAL compiler reads that CSV
 (`COST_FILE_CSV_NAME`) to decide which instruction variants to select.
+
+The benchmark build generates a missing CSV on demand. To generate every CSV
+the benchmarks need up front (each configuration in `benchmarks/configs/` at
+each benchmark VF from `benchmarks/Makefile`):
+
+```sh
+python3 perf_cost_model/generate_config_files_pim_configs.py --dry-run   # list them
+python3 perf_cost_model/generate_config_files_pim_configs.py --jobs 4
+```
 
 ## Environment
 
