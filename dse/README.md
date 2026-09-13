@@ -21,7 +21,6 @@ source ../env.sh
 | `generate_regsweep_cfg_files.py` | Generates register-sweep `.cfg` variants |
 | `cost_dict.py` | Cost lookup tables |
 | `get_eq_class_for.py` | Equivalence-class lookup for a given instruction |
-| `compare.py` | Diffs two result CSVs (e.g. energy-optimized vs perf-optimized) |
 
 ## Configurations
 
