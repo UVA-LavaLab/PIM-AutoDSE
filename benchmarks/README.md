@@ -1,126 +1,132 @@
 # Benchmarks
 
-One benchmark tree, retargeted by config file. Previously this was five
-near-duplicate directories (`Aquabolt`, `PIMeval_Bank_LPDDR`,
-`PIMeval_Bank_Rank1_GDDR`, `PIMeval_Bank_Rank1_HBM`, `PIMeval_Bank_Rank20`)
-that differed only in which config they pointed at.
+Halide benchmarks compiled to PIM instructions with MISAAL and evaluated on
+the PIM simulator.
 
-## Running
+Before running anything, complete the setup in the
+[top-level README](../README.md) and source the environment:
 
 ```sh
 source ../env.sh
-
-python3 run_benchmarks.py --list
-python3 run_benchmarks.py --benchmark axpy
-python3 run_benchmarks.py --benchmark axpy --config PIMeval_Bank_Rank20 --mode fused
-python3 run_benchmarks.py --all --csv ../results/sweep.csv
 ```
 
-A full sweep is 14 benchmarks on 5 configs plus 9 on Aquabolt, × 2 modes =
-158 runs, and takes
-**hours**. Start with `--dry-run`.
+## Running benchmarks
 
-Useful flags: `--keep-going` (don't stop at the first failure), `--timeout SEC`,
-`--clean` (rebuild from scratch each run), `--jobs N`.
-
-Or drive `make` directly:
+`run_benchmarks.py` builds, runs, and optionally collects results for one or
+more benchmarks:
 
 ```sh
-make axpy CONFIG=PIMeval_Bank_LPDDR FUSED=1
+python3 run_benchmarks.py --list                                # benchmarks and configurations
+python3 run_benchmarks.py --benchmark relu                      # all configurations, both modes
+python3 run_benchmarks.py --benchmark relu --config PIMeval_Bank_LPDDR --mode fused
+python3 run_benchmarks.py --all --dry-run                       # show a full sweep without running it
+python3 run_benchmarks.py --all --csv ../results/results.csv    # full sweep, then parse results
+```
+
+Useful options:
+
+| Option | Description |
+|---|---|
+| `--config NAME` | Hardware configuration (repeatable; default: all) |
+| `--mode fused\|unfused` | Fusion mode (repeatable; default: both) |
+| `--keep-going` | Continue after a failed run |
+| `--timeout SEC` | Per-run time limit |
+| `--clean` | Rebuild each benchmark from scratch |
+| `--dry-run` | Print the plan without building or running |
+
+A full sweep builds and simulates every benchmark on every configuration in
+both modes and can take many hours.
+
+You can also use `make` directly:
+
+```sh
+make relu CONFIG=PIMeval_Bank_LPDDR FUSED=1
 make list
 make clean
 ```
 
-## The two axes
+## Configurations
 
-**Hardware target** — `CONFIG=<name>`, a basename in `configs/`. The target is
-read at run time from `$PIM_CONFIG`, so one build serves every target.
+Select a hardware configuration with `--config` or `CONFIG=`. Configuration
+files are in `configs/`.
 
-| Config | Target |
+| Configuration | Description |
 |---|---|
-| `PIMeval_Bank_LPDDR` | Bank-level, 10 ranks, LPDDR4 |
-| `PIMeval_Bank_Rank20` | Bank-level, 20 ranks, DDR4 |
-| `PIMeval_Bank_Rank1_GDDR` | Bank-level, 1 rank, GDDR5 |
-| `PIMeval_Bank_Rank1_HBM` | Bank-level, 1 rank, HBM2 |
+| `PIMeval_Bank_LPDDR` | Bank-level PIM, 10 ranks, LPDDR4 |
+| `PIMeval_Bank_Rank20` | Bank-level PIM, 20 ranks, DDR4 |
+| `PIMeval_Bank_Rank1_GDDR` | Bank-level PIM, 1 rank, GDDR5 |
+| `PIMeval_Bank_Rank1_HBM` | Bank-level PIM, 1 rank, HBM2 |
 | `PIMeval_AiM_Rank8` | AiM, 8 ranks, GDDR5 |
-| `Aquabolt` | Aquabolt, 8 ranks, HBM2 — evaluated on axpy, convolution, gemm, gemv and relu only |
+| `Aquabolt` | Aquabolt, 8 ranks, HBM2 (axpy, convolution, gemm, gemv, and relu only) |
 
-**Fusion mode** — `FUSED=1` compiles against `isa/lowering/fused_lower.h`,
-`FUSED=0` against `unfused_lower.h`. Both link the same freshly built
-`libpimeval.a`, so the delta is attributable to fusion alone. Internally this
-drives `MISAAL_NO_FUSION`.
+## Fusion modes
 
-## Cost model
+- **Fused** (`--mode fused`, `FUSED=1`): each instruction's operations are
+  combined and executed inside the PIM unit.
+- **Unfused** (`--mode unfused`, `FUSED=0`): each operation executes
+  separately, writing intermediate results back to memory.
 
-MISAAL chooses which fused ISA variants to emit using a cost model measured for
-a specific hardware config and vectorization factor (VF):
+Both modes use the same simulator build, so the difference between them
+reflects instruction fusion.
 
-```
-isa/perf_cost_model/perf_logs/pim_perf_results_config_<CONFIG>_vf<VF>.csv
-```
+## Cost models
 
-Before MISAAL codegen, `common/ensure_cost_model.py` reuses that CSV if it
-exists and otherwise generates it with `isa/perf_cost_model/GenPimFusedCost.py`,
-which runs every fused and unfused ISA operation on the simulator. Generation
-is slow the first time for each (config, VF) and cached afterwards; the CSVs
-are not committed. A lock file keeps parallel builds from generating the same
-CSV twice. The generator must use this repository's `libpimeval` build (staged
-in `libpimsim/` by `setup.sh`) and refuses to run against any other copy.
-
-Each benchmark's VF comes from the `vectorize()` factor in its generator and is
-listed by `make list`; override it with `VF=<n>`. The step is skipped when
-`ENABLE_HYDRIDE=0`, since that path does not use MISAAL.
-
-## Build pipeline
+MISAAL selects PIM instructions using a cost model for the chosen
+configuration and the benchmark's vectorization factor (VF). Cost models are
+stored in `../isa/perf_cost_model/perf_logs/`:
 
 ```
-<bench>/src/<bench>_generator.cpp
-    │  1. compile the Halide generator
-    ▼
-<bench>/bin/<bench>_generator
-    │  2. run it -> MISAAL/PIM lowering
-    ▼
-<bench>/bin/<bench>.halide_generated.cpp
-    │  3. inline.py        splice in the PIM header
-    │  4. fix_type_decl.py  repair generated signatures
-    ▼
-    │  5. compile twice: compute-profiling and data-movement-profiling
-    ▼
-<bench>/bin/<bench>_{compute,data_movement}_run.out
-    │  6. run both under $PIM_CONFIG
-    ▼
-logs/<config>/<bench>_<mode>_{compute_log,data_movement_log,pim_header.h}
+pim_perf_results_config_<CONFIG>_vf<VF>.csv
+```
+
+If the required cost model is missing, it is generated automatically before
+compilation and reused afterwards. Generating a cost model for a large VF can
+take a long time.
+
+Each benchmark's VF is set in the `Makefile` and shown by `make list`. To use a
+different VF, pass `VF=<n>` to `make`.
+
+To limit the number of simulator threads, set `PIMEVAL_MAX_NUM_THREADS`:
+
+```sh
+PIMEVAL_MAX_NUM_THREADS=8 make relu CONFIG=PIMeval_Bank_LPDDR
 ```
 
 ## Output
 
-Each `(benchmark, config, mode)` produces two logs:
+Each run writes its logs to `logs/<CONFIG>/`:
 
-- `*_compute_log` — full run; `PIM Command Stats` carries the per-command cost
-- `*_data_movement_log` — compute suppressed; `Data Copy Stats` isolate the
-  host↔device transfer cost
+| File | Contents |
+|---|---|
+| `<bench>_<mode>_compute_log` | Simulator statistics for PIM computation |
+| `<bench>_<mode>_data_movement_log` | Simulator statistics for host–device data movement |
+| `<bench>_<mode>_pim_header.h` | PIM code generated by MISAAL |
 
-End-to-end cost is the sum. Both logs contain a copy block, so the parser takes
-it only from the data-movement log to avoid double counting.
+Parse the logs into CSV files:
 
 ```sh
-python3 stats/parse_logs.py logs --recursive --csv ../results/sweep.csv \
-                                 --commands-csv ../results/commands.csv
+python3 stats/parse_logs.py logs --recursive \
+    --csv ../results/results.csv \
+    --commands-csv ../results/commands.csv
 ```
 
-The summary CSV carries device parameters, transfer bytes and cost, per-command
-totals, fusion group count, and combined runtime/energy. The commands CSV is
-the long-form per-instruction breakdown.
+`results.csv` has one row per benchmark, configuration, and mode, with device
+parameters, data movement cost, PIM command totals, and combined runtime and
+energy. `commands.csv` breaks the cost down by PIM command.
 
-A run that exits cleanly but emits no `PIM Command Stats` block is reported,
-not silently dropped.
+## Benchmark list
 
-## Benchmarks
+| Benchmark | Description |
+|---|---|
+| `tensor_add` | Element-wise tensor addition |
+| `axpy` | Scaled vector addition |
+| `relu` | Rectified linear unit |
+| `gemv_v1`, `gemv_v2`, `gemv_v3` | General matrix–vector multiplication |
+| `gemm_small`, `gemm_medium`, `gemm_large` | General matrix multiplication |
+| `histogram` | Image histogram |
+| `filter_by_key` | Filtering by key |
+| `convolution` | 2D convolution |
+| `radix_sort` | Radix sort |
+| `softmax` | Softmax |
 
-`tensor_add`, `axpy`, `relu`, `gemv_v1`, `gemv_v2`, `gemv_v3`, `gemm_small`,
-`gemm_medium`, `gemm_large`, `histogram`,
-`filter_by_key`, `convolution`, `radix_sort`,
-`softmax`.
-
-`run_benchmarks.py --list` reads this list from the Makefile, so the two cannot
-drift apart.
+Each benchmark's Halide generator is in `<benchmark>/src/`.

@@ -3,137 +3,105 @@
 ![Contribution](https://img.shields.io/badge/Contribution-Welcome-blue)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-A retargetable framework for **automated ISA and design space exploration for
-processing-in-memory (PIM)**.
+PIM-AutoDSE is a framework for automated instruction set architecture (ISA)
+and design space exploration for processing-in-memory (PIM).
 
-Processing-in-memory offers a promising answer to the memory wall, but its
-Instruction Set Architecture has never been systematically evaluated. ISA
-choices — instruction fusion in particular — directly affect DRAM read/write
-behaviour: an *unfused* instruction spills its intermediate result back to the
-DRAM array, and every spill costs an ACTIVATE/PRECHARGE pair that inflates both
-runtime and energy.
+It combines:
 
-PIM-AutoDSE extends [PIMeval-PIMbench](https://github.com/UVA-LavaLab/PIMeval-PIMbench)
-with cycle-accurate performance and energy analysis covering instruction
-fusion, register contention, and prefetching; extends the synthesis-based
-compiler [MISAAL](https://github.com/RafaeNoor/MISAAL) to generate code from
-high-level languages to diverse PIM architectures; and adds a methodology for
-synthesizing PIM ISAs from pseudocode to produce RISC- and CISC-like ISAs
-automatically.
-
-## Architecture
-
-Three repositories cooperate; two arrive as submodules.
-
-```
-PIM-AutoDSE/                  simulator, benchmarks, ISA, DSE
-├── libpimeval/               the PIM simulator
-├── isa/                      bitsimd ISA enumeration -> lowering interfaces
-├── benchmarks/               one tree, retargeted by config file
-├── dse/                      design space exploration sweeps
-├── MISAAL/        submodule  Halide-based compiler targeting the simulator
-├── Hydride/       submodule  Rose / Rosette IR framework
-└── egglog/        submodule  equality saturation engine (pinned to 14542d7)
-```
-
-```
-ISA enumeration (TOML)  ──>  fused_lower.h / unfused_lower.h
-                                      │  (shipped; pick one per build)
-MISAAL Halide generator               │
-        │                             │
-        ▼                             │
-<bench>.halide_generated.cpp          │
-        │                             │
-        ▼  fix_type_decl.py           │
-   repaired misaal_* signatures       │
-        │                             │
-        └──────────► compile + link ◄─┘
-                          │   + libpimeval.a
-                          ▼
-                 run under <config>.cfg
-                          │
-                          ▼
-        *_compute_log + *_data_movement_log  ──>  results CSV
-```
-
-## Quick start
-
-```sh
-git clone --recursive https://github.com/UVA-LavaLab/PIM-AutoDSE.git
-cd PIM-AutoDSE
-
-# Builds Halide and libpimeval, writes env.sh
-LLVM_CONFIG=/path/to/llvm-12/bin/llvm-config ./setup.sh
-source env.sh
-
-cd benchmarks
-python3 run_benchmarks.py --list
-python3 run_benchmarks.py --benchmark axpy --config PIMeval_Bank_LPDDR
-```
-
-A full sweep compiles and simulates every benchmark × config × mode and can
-take **hours**. Use `--dry-run` first to see the plan.
+- **A PIM simulator** based on [PIMeval-PIMbench](https://github.com/UVA-LavaLab/PIMeval-PIMbench),
+  extended with performance and energy modeling for instruction fusion,
+  register contention, and prefetching.
+- **A compiler flow** built on [MISAAL](https://github.com/RafaeNoor/MISAAL),
+  which lowers Halide programs to fused or unfused PIM instructions.
+- **An ISA synthesis methodology** that generates RISC- and CISC-style PIM
+  instructions from pseudocode descriptions.
 
 ## Requirements
 
-| Dependency | Version | Notes |
-|---|---|---|
-| LLVM | 12–15 | Reference build used **LLVM 12**. Point `LLVM_CONFIG` at it; `setup.sh` will not build LLVM for you. |
-| GNU Make | any | Halide is built with `make distrib`, **not** CMake — the MISAAL fork's PIM codegen path is only wired into the Makefile |
-| GCC / G++ | C++17 | AVX-512 used by the benchmark harness |
-| Python | ≥ 3.8 | `pip install -r requirements.txt` |
-| Git LFS | any | Required for the ISA lowering headers (~190 MB) |
-| Rust / cargo | any | Builds egglog, the equality-saturation engine |
-| Racket + Rosette | optional | Only to *regenerate* the ISA; the release ships pre-generated artifacts |
+- Linux (x86-64 with AVX-512)
+- GCC with C++17 support and GNU Make
+- LLVM 12–15 (tested with LLVM 12)
+- Python 3.8+
+- Rust and Cargo (to build egglog)
+- [Git LFS](https://git-lfs.com/)
 
-## Selecting a hardware target
+## Installation
 
-One benchmark tree serves every target; the config file is the only knob.
-The target is read at run time from `$PIM_CONFIG`, so a build is not tied to
-a target.
+Install Git LFS before cloning, since the ISA lowering headers are stored with it:
 
 ```sh
-make axpy CONFIG=PIMeval_Bank_Rank20 FUSED=1
+git lfs install
+git clone --recursive https://github.com/UVA-LavaLab/PIM-AutoDSE.git
+cd PIM-AutoDSE
+pip install -r requirements.txt
 ```
 
-Available configs live in `benchmarks/configs/`:
-`PIMeval_Bank_LPDDR`, `PIMeval_Bank_Rank20`, `PIMeval_Bank_Rank1_GDDR`,
-`PIMeval_Bank_Rank1_HBM`, `PIMeval_AiM_Rank8`, `Aquabolt`.
-
-`FUSED=1` compiles against the fused ISA lowering, `FUSED=0` against the
-unfused baseline. Both link the same freshly built `libpimeval.a`, so the
-difference between them is attributable to fusion alone.
-
-## Results
-
-Each run produces a compute log and a data-movement log. Parse them with:
+Build the toolchain and generate the environment script, pointing
+`LLVM_CONFIG` at your LLVM installation:
 
 ```sh
-python3 benchmarks/stats/parse_logs.py benchmarks/logs --recursive --csv out.csv
+LLVM_CONFIG=/path/to/llvm/bin/llvm-config ./setup.sh
+source env.sh
 ```
 
-The CSV carries device parameters, host↔device transfer bytes and cost,
-per-command runtime/energy/GOPS-per-watt, the fusion group count, and combined
-totals.
+`setup.sh` builds Halide (from the MISAAL submodule), egglog, the simulator
+library, and the ISA lowering libraries, then writes `env.sh`. The first run
+takes a while. Run `./setup.sh --help` for options such as `--skip-halide`.
 
-## Documentation
+Source `env.sh` in every new shell before building or running benchmarks.
 
-- [`isa/README.md`](isa/README.md) — how the ISA is enumerated and lowered
-- [`benchmarks/README.md`](benchmarks/README.md) — building and running benchmarks
-- [`dse/README.md`](dse/README.md) — design space exploration sweeps
+## Usage
+
+Run a benchmark on a PIM configuration:
+
+```sh
+cd benchmarks
+python3 run_benchmarks.py --list
+python3 run_benchmarks.py --benchmark relu --config PIMeval_Bank_LPDDR
+```
+
+Collect the results into a CSV:
+
+```sh
+python3 stats/parse_logs.py logs --recursive --csv ../results/results.csv
+```
+
+See [`benchmarks/README.md`](benchmarks/README.md) for configurations, fusion
+modes, cost models, and output formats.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `libpimeval/` | PIM simulator library |
+| `benchmarks/` | Halide benchmarks, hardware configurations, and scripts to run them and parse results |
+| `isa/` | ISA specification, enumeration and code generation, and the fused/unfused lowering headers |
+| `dse/` | Design space exploration scripts |
+| `MISAAL/` | Compiler (submodule) |
+| `Hydride/` | Rosette IR framework used for ISA synthesis (submodule) |
+| `egglog/` | Equality saturation engine used by MISAAL (submodule) |
+| `PIMbench/`, `misc-bench/` | Benchmarks from PIMeval-PIMbench |
+
+Further documentation:
+
+- [`benchmarks/README.md`](benchmarks/README.md) — running benchmarks
+- [`isa/README.md`](isa/README.md) — ISA enumeration and lowering
+- [`dse/README.md`](dse/README.md) — design space exploration
 
 ## Citation
 
-See [`CITATION.cff`](CITATION.cff).
+If you use PIM-AutoDSE in your research, please cite
+*PIM-AutoDSE: Automated ISA and Design Space Exploration for PIM*.
+Citation metadata is in [`CITATION.cff`](CITATION.cff).
 
 ## Contact
 
-* Abdul Rafae Noor — arnoor2 AT illinois DOT edu
-* Farzana Ahmed Siddique — farzana AT virginia DOT edu
-* Kevin Skadron — skadron AT virginia DOT edu
-* Vikram Adve — vadve AT illinois DOT edu
+- Abdul Rafae Noor — arnoor2 AT illinois DOT edu
+- Farzana Ahmed Siddique — farzana AT virginia DOT edu
+- Kevin Skadron — skadron AT virginia DOT edu
+- Vikram Adve — vadve AT illinois DOT edu
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE). Third-party components and their licenses are
-listed in [`THIRD_PARTY.md`](THIRD_PARTY.md).
+PIM-AutoDSE is released under the MIT License. See [`LICENSE`](LICENSE), and
+[`THIRD_PARTY.md`](THIRD_PARTY.md) for third-party components.
