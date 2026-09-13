@@ -53,6 +53,7 @@ dse_logs_*/
 dse_perf_logs_*/
 aqbolt_dse_logs/
 work_dir_*/
+dse/autodse_main_out/
 *_test.cpp
 failed.log
 
