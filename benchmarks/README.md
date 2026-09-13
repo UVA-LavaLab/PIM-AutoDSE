@@ -49,6 +49,27 @@ read at run time from `$PIM_CONFIG`, so one build serves every target.
 `libpimeval.a`, so the delta is attributable to fusion alone. Internally this
 drives `MISAAL_NO_FUSION`.
 
+## Cost model
+
+MISAAL chooses which fused ISA variants to emit using a cost model measured for
+a specific hardware config and vectorization factor (VF):
+
+```
+isa/perf_cost_model/perf_logs/pim_perf_results_config_<CONFIG>_vf<VF>.csv
+```
+
+Before MISAAL codegen, `common/ensure_cost_model.py` reuses that CSV if it
+exists and otherwise generates it with `isa/perf_cost_model/GenPimFusedCost.py`,
+which runs every fused and unfused ISA operation on the simulator. Generation
+is slow the first time for each (config, VF) and cached afterwards; the CSVs
+are not committed. A lock file keeps parallel builds from generating the same
+CSV twice. The generator must use this repository's `libpimeval` build (staged
+in `libpimsim/` by `setup.sh`) and refuses to run against any other copy.
+
+Each benchmark's VF comes from the `vectorize()` factor in its generator and is
+listed by `make list`; override it with `VF=<n>`. The step is skipped when
+`ENABLE_HYDRIDE=0`, since that path does not use MISAAL.
+
 ## Build pipeline
 
 ```

@@ -60,10 +60,36 @@ endif
 
 LOG_DIR := $(LOG_ROOT)/$(CONFIG)
 
-# Cost model CSV consumed by the MISAAL generator. Per-target; optional.
-VF            ?= 65536
-COST_CSV_ROOT ?= $(PIM_ISA_ROOT)/perf_cost_model/perf_logs
-COST_CSV      ?= $(COST_CSV_ROOT)/pim_perf_results_config_$(CONFIG)_vf$(VF).csv
+# --- Cost model ------------------------------------------------------------
+# The MISAAL generator picks ISA variants using a per-(config, VF) cost model:
+#   $(COST_CSV_ROOT)/pim_perf_results_config_<CONFIG>_vf<VF>.csv
+# common/ensure_cost_model.py reuses it if present and generates it otherwise.
+#
+# VF is each benchmark's vectorization factor, taken from the vectorize() call
+# in its generator (<bench>/src/<bench>_generator.cpp). Override with VF=<n>.
+VF_tensor_add      := 128
+VF_max_pool        := 4
+VF_softmax         := 1024
+VF_gemv_v1         := 4096
+VF_bitsimd_gemv    := 8192
+VF_gemv_v3         := 8192
+VF_histogram       := 8192
+VF_gemv_v2         := 16384
+VF_axpy            := 65536
+VF_radix_sort      := 262144
+VF_radix_sort_i16  := 262144
+VF_filter_by_key   := 524288
+VF_batched_gemm_v1 := 2097152
+VF_convolution     := 4194304
+VF_gemm_small      := 16777216
+VF_relu            := 16777216
+VF_gemm_medium     := 33554432
+VF_gemm_large      := 67108864
+
+VF            ?=
+bench_vf       = $(or $(VF),$(VF_$(1)),$(error no VF defined for benchmark $(1)))
+COST_CSV_ROOT ?= $(abspath $(BENCH_ROOT)/../isa/perf_cost_model/perf_logs)
+cost_csv       = $(COST_CSV_ROOT)/pim_perf_results_config_$(CONFIG)_vf$(call bench_vf,$(1)).csv
 
 # --- Codegen knobs ---------------------------------------------------------
 ENABLE_HYDRIDE ?= 1
@@ -135,20 +161,19 @@ LDFLAGS_COMMON  = -L ./libpimsim/ -lpimeval -Wl,--gc-sections
 all: $(benchmarks)
 
 list:
-	@echo "Benchmarks:"; printf '  %s\n' $(benchmarks)
+	@echo "Benchmarks (VF):"; $(foreach b,$(benchmarks),printf '  %-18s %s\n' $(b) $(call bench_vf,$(b));)
 	@echo "Configs:";    ls $(CONFIG_DIR)/*.cfg | xargs -n1 basename | sed 's/\.cfg$$//' | sed 's/^/  /'
 
 check-env:
 	@test -n "$(HALIDE_DISTRIB)" || { echo "HALIDE_DISTRIB unset - run: source ../env.sh"; exit 1; }
 	@test -f "$(CFG_FILE)" || { echo "no such config: $(CFG_FILE)"; echo "try: make list"; exit 1; }
-	@test -f "$(COST_CSV)" || echo "[warn] cost model CSV not found: $(COST_CSV)"
 	@test -f "$(LOWER_LIB)" || { echo "missing $(LOWER_LIB) - run ../setup.sh to build the lowering objects"; exit 1; }
 
 # ---------------------------------------------------------------------------
 # Build + run one benchmark for the selected (CONFIG, MODE)
 # ---------------------------------------------------------------------------
 $(benchmarks): %: %/bin check-env
-	@echo "==> $@  [config=$(CONFIG) mode=$(MODE)]"
+	@echo "==> $@  [config=$(CONFIG) mode=$(MODE) vf=$(call bench_vf,$@)]"
 
 #	1. Build the Halide generator
 	$(CXX) --std=c++17 -fno-rtti -O3 -DLOG2VLEN=7 \
@@ -158,6 +183,12 @@ $(benchmarks): %: %/bin check-env
 		-o $@/bin/$@_generator \
 		-L $(HALIDE_DISTRIB)/lib -lHalide \
 		$(shell $(LLVM_ROOT)/bin/llvm-config --system-libs --link-static)
+
+ifeq ($(ENABLE_HYDRIDE),1)
+#	1b. Cost model for this (CONFIG, VF): reuse if cached, generate if not
+	python3 $(COMMON_DIR)/ensure_cost_model.py --config $(CFG_FILE) \
+		--vf $(call bench_vf,$@) --out-dir $(COST_CSV_ROOT) --libpimsim $(BENCH_ROOT)/libpimsim
+endif
 
 #	2. Run the generator -> MISAAL/PIM lowering
 	export LD_LIBRARY_PATH=$(HALIDE_DIR)/lib; \
@@ -170,7 +201,7 @@ $(benchmarks): %: %/bin check-env
 	HL_SYNTH_BW=$(SYNTH_BITWIDTH) \
 	HYDRIDE_INITIAL_HASH=$(STARTING_HASH) \
 	MISAAL_DISABLE_FRONTEND_PATTERNS=1 \
-	COST_FILE_CSV_NAME=$(COST_CSV) \
+	COST_FILE_CSV_NAME=$(call cost_csv,$@) \
 		./$@/bin/$@_generator -t 0 -o $@/bin -g $@ -e cpp,h,stmt -f $@ target=$(TARGET)
 
 #	3. Halide runtime object
