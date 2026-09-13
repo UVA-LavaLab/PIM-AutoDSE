@@ -5,18 +5,6 @@ import subprocess as sb
 from utils.DSLInstructionUtils import get_random_tempfile_name
 
 import os
-import opentuner
-from opentuner.search.manipulator import (ConfigurationManipulator,
-                                          IntegerParameter,
-                                          LogIntegerParameter,
-                                          SelectorParameter,
-                                          SwitchParameter,
-                                          EnumParameter,
-                                          PowerOfTwoParameter,
-                                          BooleanParameter,
-                                          FloatParameter
-                                          )
-import argparse
 
 # Resolved from the environment (see env.sh at the repo root) rather than
 # hardcoded to one machine's checkout.
@@ -26,145 +14,24 @@ if HALIDE_DISTRIB is None:
         "HALIDE_DISTRIB is not set - run `source env.sh` at the repo root")
 HALIDE_DISTRIB = HALIDE_DISTRIB.rstrip("/")
 
-from opentuner import ConfigurationManipulator
-from opentuner import EnumParameter
-from opentuner import IntegerParameter
-from opentuner import MeasurementInterface
-from opentuner import Result
-from opentuner.search.objective import ThresholdAccuracyMinimizeTime, MinimizeTime
-from opentuner.measurement.inputmanager import FixedInputManager
 
-def execute_cmd(cmd):
+# Benchmark tree the DSE flow builds from. Paths are absolute so the flow can
+# be driven from any directory (dse_compile.py runs from dse/).
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+BENCH_ROOT = os.environ.get("PIM_BENCH_ROOT") or os.path.join(_REPO_ROOT, "benchmarks")
+LIBPIMSIM = os.path.join(BENCH_ROOT, "libpimsim")
+ENSURE_COST_MODEL = os.path.join(BENCH_ROOT, "common", "ensure_cost_model.py")
+COST_CSV_ROOT = os.path.join(_REPO_ROOT, "isa", "perf_cost_model", "perf_logs")
+
+def execute_cmd(cmd, env = None):
     print(f"$\t{cmd}")
-    try:
-        sb.call(cmd, shell = True, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-        return True
-    except Exception as e:
-        print("Command failed :(", cmd, e)
+    result = sb.run(cmd, shell = True, stdout = sb.PIPE, stderr = sb.STDOUT, env = env)
+    if result.returncode != 0:
+        output = result.stdout.decode(errors = "replace").splitlines()
+        print(f"Command failed (exit {result.returncode}):", cmd)
+        print("\n".join(output[-20:]))
         return False
-
-
-
-class TunerGen:
-    def __init__(self, work_dir = './tuner_dir'):
-        self.work_dir = work_dir
-        self.tuning_params = []
-
-        self.concept_names = {
-            "rank": "RANK",
-            'bpr': "BANKS_PER_RANK",
-            'spb': "SUBARRAYS_PER_BANK",
-            'num_rows': 'NUM_ROWS',
-            'num_cols': 'NUM_COLS',
-            'vf': 'VECTORIZATION_FACTOR',
-            'device_type': 'DEVICE_TYPE'
-        }
-
-
-
-
-        self.inserted = set()
-
-
-    def get_tuning_parameters(self):
-        assert len(self.tuning_params) == len(self.concept_names), "Need to specify complete tuning params"
-        return self.tuning_params
-
-
-
-    def create_integer_param(self, _min, _max, power_of_two_only = False, key_name = None):
-        assert not key_name is None
-        assert self.concept_names[key_name] not in self.inserted
-        int_param = None
-        if power_of_two_only:
-            int_param = PowerOfTwoParameter(self.concept_names[key_name], _min, _max)
-        else:
-            int_param = IntegerParameter(self.concept_names[key_name], _min, _max)
-        self.inserted.add(self.concept_names[key_name])
-        self.tuning_params.append(int_param)
-
-
-
-    def add_num_ranks_tuning(self, _min, _max, power_of_two_only = True):
-        self.create_integer_param(_min, _max, power_of_two_only = power_of_two_only, key_name = 'rank')
-
-    def add_num_banks_per_rank_tuning(self, _min, _max, power_of_two_only = True):
-        self.create_integer_param(_min, _max, power_of_two_only = power_of_two_only, key_name = 'bpr')
-
-    def add_num_subarrays_per_bank_tuning(self, _min, _max, power_of_two_only = True):
-        self.create_integer_param(_min, _max, power_of_two_only = power_of_two_only, key_name = 'spb')
-
-    def add_num_rows_tuning(self, _min, _max, power_of_two_only = True):
-        self.create_integer_param(_min, _max, power_of_two_only = power_of_two_only, key_name = 'num_rows')
-
-    def add_num_cols_tuning(self, _min, _max, power_of_two_only = True):
-        self.create_integer_param(_min, _max, power_of_two_only = power_of_two_only, key_name = 'num_cols')
-
-    def add_VF_tuning(self, _min, _max, power_of_two_only = True):
-        self.create_integer_param(_min, _max, power_of_two_only = power_of_two_only, key_name = 'vf')
-
-    def add_device_type_tuning(self, device_types = []):
-        assert len(device_types) > 0
-        key_name = 'device_type'
-        assert self.concept_names[key_name] not in self.inserted
-        param = EnumParameter(self.concept_names[key_name], device_types)
-        self.inserted.add(self.concept_names[key_name])
-        self.tuning_params.append(param)
-
-
-class PIMTuner(MeasurementInterface):
-    def __init__(self, args):
-        self.tuning_params = args.tuning_params
-        self.num_knobs = len(args.tuning_params)
-
-        objective = MinimizeTime()
-        input_manager = FixedInputManager(size=self.num_knobs)
-
-        super(PIMTuner, self).__init__(args, program_name="pim_tuning", input_manager=input_manager ,objective = objective)
-        self.benchmark_name = args.benchmark_name
-        self.evaluate_config_fn = args.evaluate_config_fn
-
-    def manipulator(self):
-        manipulator = ConfigurationManipulator()
-
-        for param in self.tuning_params:
-            manipulator.add_parameter(param)
-        return manipulator
-
-    def compile(self, cfg, id):
-        try:
-            run_result = self.evaluate_config_fn(cfg, self.benchmark_name)
-            return Result(time=run_result['time'])
-        except Exception as e:
-            print("Returning Error", e)
-            return Result(state='ERROR', time=float('inf'))
-
-
-
-    def run(self, desired_result, input, limit):
-
-        try:
-            cfg = desired_result.configuration.data
-            run_result = self.evaluate_config_fn(cfg, self.benchmark_name)
-            return Result(time=run_result['time'])
-        except Exception as e:
-            print("Returning Error", e)
-            return Result(state='ERROR', time=float('inf'))
-
-
-    def run_precompiled(self, desired_result, input, limit, compile_result, id):
-
-        try:
-            cfg = desired_result.configuration.data
-            run_result = self.evaluate_config_fn(cfg, self.benchmark_name)
-            return Result(time=run_result['time'])
-        except Exception as e:
-            print("Returning Error", e)
-            return Result(state='ERROR', time=float('inf'))
-
-    def save_final_config(self, configuration):
-        self.manipulator().save_to_file(configuration.data, 'opentuner_final_config.json')
-
+    return True
 
 
 def get_result_stats_from_pim_log_file(fname):
@@ -190,7 +57,6 @@ def get_result_stats_from_pim_log_file(fname):
 
 
     assert False, "Unreachable"
-
 
 
 def get_full_pim_result_stats_from_pim_log_files(compute_fname, datamovement_fname):
@@ -231,7 +97,6 @@ def get_full_pim_result_stats_from_pim_log_files(compute_fname, datamovement_fna
             if f"TOTAL {EVT}:" in line:
                 value = line.split(":")[-1].strip()
                 stats[f'EVT_{EVT}_COUNT'] = value
-
 
 
     with open(datamovement_fname, "r") as StatFile:
@@ -383,10 +248,6 @@ def fix_header_type_decls(data):
         func_to_opnd_map[func_name] = opnd_types
 
 
-
-
-
-
     for idx, line in enumerate(data):
         if "misaal" not in line:
             continue
@@ -437,9 +298,13 @@ def compile_halide_benchmark_from_cfg_file(benchmark_name, cfg, perf_file_csv, c
         base_name = os.path.basename(FILE)
         cfg_base_name = os.path.splitext(base_name)[0]
 
+        # The simulator reads its config from $PIM_CONFIG (see benchmarks/test/run.cpp).
+        FILE = os.path.abspath(FILE)
+        run_env = dict(os.environ, PIM_CONFIG = FILE)
+
         GENERATOR_FILE_NAME = f"{tmp_dir}/{benchmark_name}_generator"
         RESULT_HEADER_FILE = f"{tmp_dir}/misaal_pim_lib.h"
-        make_gen_cmd = f"g++ --std=c++17 -fno-rtti -O3 -DLOG2VLEN=7  -DVF={VF} -I {HALIDE_DISTRIB}/include -I {HALIDE_DISTRIB}/tools -g {benchmark_name}/src/{benchmark_name}_generator.cpp {HALIDE_DISTRIB}/tools/GenGen.cpp hannk/common_halide.cpp -o {GENERATOR_FILE_NAME} -L {HALIDE_DISTRIB}/lib -lHalide -lrt -ldl -lm -lz -lxml2"
+        make_gen_cmd = f"g++ --std=c++17 -fno-rtti -O3 -DLOG2VLEN=7  -DVF={VF} -I {HALIDE_DISTRIB}/include -I {HALIDE_DISTRIB}/tools -g {BENCH_ROOT}/{benchmark_name}/src/{benchmark_name}_generator.cpp {HALIDE_DISTRIB}/tools/GenGen.cpp {BENCH_ROOT}/hannk/common_halide.cpp -o {GENERATOR_FILE_NAME} -L {HALIDE_DISTRIB}/lib -lHalide -lrt -ldl -lm -lz -lxml2"
 
 
         eq_sat_file = f"{benchmark_name}_{tmp_dir}_misaal*.py"
@@ -452,11 +317,17 @@ def compile_halide_benchmark_from_cfg_file(benchmark_name, cfg, perf_file_csv, c
         halide_cpp_fname = f"{tmp_dir}/{benchmark_name}.halide_generated.cpp"
 
 
+        # Same flags as benchmarks/Makefile: the declarations-only lowering header
+        # plus the prebuilt fused_lib.o, instead of compiling the full lowering
+        # header into every binary.
+        common_flags = f"-DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS -Dbenchmark_{benchmark_name} --std=c++17 -O3 -march=native -mavx512vl -mavx512ifma -ffunction-sections -fdata-sections -I {HALIDE_DISTRIB}/include -I {LIBPIMSIM}/decls -I {LIBPIMSIM} -I {tmp_dir} -lstdc++ -ldl -pthread"
+        common_inputs = f"{BENCH_ROOT}/test/run.cpp {halide_cpp_fname} {LIBPIMSIM}/fused_lib.o -L {LIBPIMSIM} -lpimeval -Wl,--gc-sections {tmp_dir}/halide_runtime_x86.o"
+
         EXECUTABLE_COMPUTE_NAME = f"{tmp_dir}/{benchmark_name}_compute_run.out"
-        gen_compute_binary = f"g++ -DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS -DPROFILE_COMPUTE=1 -DFUSED -DVF={VF} -DPIM_CFG_FILE={FILE} -Dbenchmark_{benchmark_name} --std=c++17 -O0 -march=native -mavx512vl -mavx512ifma -I {HALIDE_DISTRIB}/include -I {tmp_dir} -I ./ -lstdc++ -ldl -pthread test/run.cpp test/stubs.cpp {halide_cpp_fname} -L ./ -lpimeval {tmp_dir}/halide_runtime_x86.o -o {EXECUTABLE_COMPUTE_NAME}"
+        gen_compute_binary = f"g++ -DPROFILE_COMPUTE=1 -DFUSED {common_flags} {common_inputs} -o {EXECUTABLE_COMPUTE_NAME}"
 
         EXECUTABLE_DATA_NAME = f"{tmp_dir}/{benchmark_name}_data_run.out"
-        gen_data_binary = f"g++ -DHALIDE_CPP_ALWAYS_USE_CPP_VECTORS -DPROFILE_DATA_MOVEMENT=1 -DVF={VF} -DPIM_CFG_FILE={FILE} -Dbenchmark_{benchmark_name} --std=c++17 -O0 -march=native -mavx512vl -mavx512ifma -I {HALIDE_DISTRIB}/include -I {tmp_dir} -I ./ -lstdc++ -ldl -pthread test/run.cpp test/stubs.cpp {halide_cpp_fname} -L ./ -lpimeval {tmp_dir}/halide_runtime_x86.o -o {EXECUTABLE_DATA_NAME}"
+        gen_data_binary = f"g++ -DPROFILE_DATA_MOVEMENT=1 {common_flags} {common_inputs} -o {EXECUTABLE_DATA_NAME}"
 
 
         success = execute_cmd(make_gen_cmd)
@@ -512,20 +383,16 @@ def compile_halide_benchmark_from_cfg_file(benchmark_name, cfg, perf_file_csv, c
             return 100000
 
 
-
-
-
-        LOGFileName = f"{copy_code_path}/{cfg_base_name}_{benchmark_name}_{VF}_compute_log"
-        with open(LOGFileName, "w+") as LogFile:
-            print(f"./{EXECUTABLE_COMPUTE_NAME}")
-            print(f"pipe to {LOGFileName}")
-            sb.call(f"./{EXECUTABLE_COMPUTE_NAME} {FILE}", shell = True, stdout = LogFile, stderr = LogFile)
-
-        LOGFileName = f"{copy_code_path}/{cfg_base_name}_{benchmark_name}_{VF}_data_log"
-        with open(LOGFileName, "w+") as LogFile:
-            print(f"./{EXECUTABLE_DATA_NAME}")
-            print(f"pipe to {LOGFileName}")
-            sb.call(f"./{EXECUTABLE_DATA_NAME} {FILE}", shell = True, stdout = LogFile, stderr = LogFile)
+        for executable, suffix in ((EXECUTABLE_COMPUTE_NAME, "compute_log"),
+                                   (EXECUTABLE_DATA_NAME, "data_log")):
+            LOGFileName = f"{copy_code_path}/{cfg_base_name}_{benchmark_name}_{VF}_{suffix}"
+            with open(LOGFileName, "w+") as LogFile:
+                print(f"PIM_CONFIG={FILE} ./{executable}")
+                print(f"pipe to {LOGFileName}")
+                return_code = sb.call(f"./{executable}", shell = True, stdout = LogFile, stderr = LogFile, env = run_env)
+            if return_code != 0:
+                print(f"{executable} failed (exit {return_code}); see {LOGFileName}")
+                return 100000
 
 
         exec_time, energy = get_result_stats_from_pim_log_file(LOGFileName)
@@ -536,9 +403,6 @@ def compile_halide_benchmark_from_cfg_file(benchmark_name, cfg, perf_file_csv, c
         print(e)
         #sb.call(f"rm -rf {tmp_dir}", shell = True)
         return 100000
-
-
-
 
 
 def pim_eval_function(cfg, benchmark_name, copy_code_path = None):
@@ -554,7 +418,17 @@ def pim_eval_function(cfg, benchmark_name, copy_code_path = None):
     FILE_NAME = cfg['FILE']
     csv_name = None
     GET_PERF = True
-    if GET_PERF:
+    if GET_PERF and FILE_NAME is not None:
+        # Same cost-model step as the benchmark Makefile: reuse the CSV in
+        # isa/perf_cost_model/perf_logs if present, generate it otherwise.
+        cmd = f"python3 {ENSURE_COST_MODEL} --config {os.path.abspath(FILE_NAME)} --vf {VECTORIZATION_FACTOR} --out-dir {COST_CSV_ROOT} --libpimsim {LIBPIMSIM}"
+        if not execute_cmd(cmd):
+            print("Cost model generation failed, returning early")
+            return {'time': 1000000}
+        cfg_name = os.path.basename(FILE_NAME).split(".")[0]
+        csv_name = os.path.join(COST_CSV_ROOT, f"pim_perf_results_config_{cfg_name}_vf{VECTORIZATION_FACTOR}.csv")
+        print("CSV Produced for ", csv_name)
+    elif GET_PERF:
         try:
             valid = evaluate_config(device_type = DEVICE_TYPE, ranks = RANK, bpr = BANKS_PER_RANK, spb = SUBARRAYS_PER_BANK, num_rows = NUM_ROWS, num_cols = NUM_COLS, vf = VECTORIZATION_FACTOR, config_file = FILE_NAME)
             print("evaluate config returned", valid)
@@ -579,32 +453,3 @@ def pim_eval_function(cfg, benchmark_name, copy_code_path = None):
     print(f"Execution time for {cfg}: {pim_execution_time}")
 
     return {'time' : pim_execution_time}
-
-
-
-
-if __name__ == "__main__":
-    tuner_gen = TunerGen()
-
-
-
-    tuner_gen.add_num_ranks_tuning(1, 16)
-    tuner_gen.add_num_banks_per_rank_tuning(1, 16)
-    tuner_gen.add_num_subarrays_per_bank_tuning(1, 16)
-    tuner_gen.add_num_rows_tuning(1024, 4096)
-    tuner_gen.add_num_cols_tuning(1024, 4096)
-    tuner_gen.add_VF_tuning(256, 4096)
-    tuner_gen.add_device_type_tuning(device_types = [PimDeviceEnum.PIM_DEVICE_BANK_LEVEL])
-
-
-
-    argparser = opentuner.default_argparser()
-
-    parsed_args = argparser.parse_args()
-    parsed_args.tuning_params = tuner_gen.get_tuning_parameters()
-    parsed_args.evaluate_config_fn = pim_eval_function
-    parsed_args.benchmark_name = "convolution"
-
-
-    pim_tuner = PIMTuner(parsed_args)
-    PIMTuner.main(parsed_args)

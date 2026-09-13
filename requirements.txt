@@ -15,8 +15,5 @@ toml>=0.10
 # Lexer/parser for the DRAM pseudocode grammar - isa/parser/
 ply>=3.11
 
-# Autotuner driving the design space search - isa/gen/PIM_TUNER_UTILS.py
-opentuner>=0.8
-
 # Numerics used across the cost model
 numpy>=1.20

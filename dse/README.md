@@ -22,6 +22,25 @@ source ../env.sh
 | `cost_dict.py` | Cost lookup tables |
 | `get_eq_class_for.py` | Equivalence-class lookup for a given instruction |
 
+## Evaluating the eval configurations
+
+`dse_compile.py` runs the DSE experiment: every benchmark it lists on every
+configuration in `cfgs/autodse_eval_cfgs/`. For each (benchmark, config) pair it
+
+1. reuses or generates the cost model in `../isa/perf_cost_model/perf_logs/`
+   (the same CSVs the benchmark flow uses),
+2. compiles the benchmark from `../benchmarks/` with MISAAL against that cost
+   model, using the lowering objects built by `setup.sh`,
+3. runs the compute and data-movement binaries with `PIM_CONFIG` set to the
+   configuration, writing `<config>_<bench>_<VF>_compute_log`, `..._data_log`
+   and `..._header.h` to `autodse_main_out/`.
+
+```sh
+cd dse
+python3 dse_compile.py
+python3 process_dse.py --log-dir autodse_main_out --benchmark softmax --data-suffix _data_log
+```
+
 ## Configurations
 
 Only the five evaluation configs are tracked, in
