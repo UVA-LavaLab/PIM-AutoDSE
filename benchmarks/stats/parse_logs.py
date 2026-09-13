@@ -79,6 +79,10 @@ _EVENT_RE = re.compile(
     re.IGNORECASE,
 )
 
+# "Rank, Bank, Subarray, Row, Col : 10, 128, 32, 1024, 1024" is split into these.
+_GEOMETRY_COLUMNS = ("ranks", "banks_per_rank", "subarrays_per_bank",
+                     "rows_per_subarray", "cols_per_subarray")
+
 # Map the human-readable `PIM Params:` labels onto column names.
 _PARAM_KEYS = {
     "PIM Device Type Enum": "device_type",
@@ -187,7 +191,12 @@ def parse_log(path: Path) -> LogStats:
         if section == "params":
             if (m := _PARAM_RE.match(line)) is not None:
                 key = _PARAM_KEYS.get(m.group("key").strip())
-                if key:
+                if key == "geometry":
+                    # "10, 128, 32, 1024, 1024" -> one numeric column per field
+                    fields = [f.strip() for f in m.group("val").split(",")]
+                    if len(fields) == len(_GEOMETRY_COLUMNS):
+                        stats.params.update(zip(_GEOMETRY_COLUMNS, fields))
+                elif key:
                     stats.params[key] = _strip_units(m.group("val"))
         elif section == "copy":
             if (m := _COPY_TOTAL_RE.match(line)) is not None:
