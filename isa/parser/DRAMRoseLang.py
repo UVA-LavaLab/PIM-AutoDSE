@@ -10,6 +10,7 @@
 from DRAM_Rosette_Emitter import CompileSemantics, DRAMRoseContext
 from TOML_Utils import *
 import glob
+import os
 
 
 
@@ -37,15 +38,18 @@ def CompileList(SemaList):
 
 
 # Need to debug these methods
+# ISA descriptions live in isa/spec/ (auto.toml is the enumerated fused ISA).
+SPEC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "spec")
+
 SKIP = [
-    "../ISA/16k_8_V_vfill.toml",
-    "../ISA/16k_8_V_pimfill.toml",
-    "../ISA/1_8_V_pimredprod.toml",
+    os.path.join(SPEC_DIR, "16k_8_V_vfill.toml"),
+    os.path.join(SPEC_DIR, "16k_8_V_pimfill.toml"),
+    os.path.join(SPEC_DIR, "1_8_V_pimredprod.toml"),
 ]
 
 
 def Compile(InstName : str = None):
-    fnames = glob.glob("../LibPimSim/auto.toml")
+    fnames = glob.glob(os.path.join(SPEC_DIR, "auto.toml"))
 
     fnames = [f for f in fnames if f not in SKIP]
 

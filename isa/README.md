@@ -14,7 +14,7 @@ from simpler primitives — not loop fusion.
 
 | Path | Contents |
 |---|---|
-| `spec/` | ISA enumeration as TOML, plus `process_toml.py` |
+| `spec/` | ISA descriptions as TOML: `auto.toml` (every enumerated fused instruction, ~28 MB), the hand-written base ISA files, and `process_toml.py` |
 | `gen/` | The enumerator: `Ops.py`, `Enumerator.py`, `TOMLEmitter.py`, `PIM_API_UTILS.py`, `PIM_TUNER_UTILS.py`, `GenRewriteRules.py` |
 | `rewrite_rules/` | Pre-synthesized rewrite rules (`rewrite_rules.txt`, `manual_rewrite_rules.txt`, `copy_rewrite_rules.txt`) |
 | `lowering/` | Generated `fused_lower.h` / `unfused_lower.h` — see `lowering/README.md` |
@@ -147,7 +147,9 @@ Rosette plus the Hydride submodule, which supplies the Rose IR
 ```sh
 git submodule update --init Hydride
 source env.sh
-python3 gen/Enumerator.py      # enumerate -> spec/*.toml
+cd gen && python3 Enumerator.py  # writes auto.toml, fused_lower.cpp, unfused_lower.cpp,
+                                 # get_perf_stats.cpp and rewrite_rules.txt into the cwd
+cd ..
 python3 gen/GenRewriteRules.py # synthesize -> rewrite_rules/
 ```
 
@@ -162,5 +164,6 @@ wins** — it carries the DRAM-command event counters (`evt_act`, `evt_pre`,
 
 Generated artifacts excluded from version control here, because they are large
 and reproducible from the above: `fused_lower.cpp` (105 MB),
-`unfused_lower.cpp` (100 MB), `auto.toml` (28 MB), `fused_ops.pickle` (13 MB),
-`semantics.py` (42 MB), and prebuilt `libpimeval.a` archives.
+`unfused_lower.cpp` (100 MB), `fused_ops.pickle` (13 MB), `semantics.py` (42 MB),
+and prebuilt `libpimeval.a` archives. `auto.toml` *is* included, in `spec/`, as
+the description of every fused instruction the lowering headers implement.
