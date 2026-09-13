@@ -48,6 +48,11 @@ pim_fused_lowering.h
 check_log
 check_log_fused
 perf_logs/
+# ...except the cost-model CSVs, which are committed (Git LFS). Lock files,
+# staging directories and per-run logs next to them stay untracked.
+!isa/perf_cost_model/perf_logs/
+isa/perf_cost_model/perf_logs/*
+!isa/perf_cost_model/perf_logs/*.csv
 dse_logs/
 dse_logs_*/
 dse_perf_logs_*/

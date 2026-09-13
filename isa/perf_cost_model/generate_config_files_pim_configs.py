@@ -9,12 +9,21 @@ produces exactly the CSVs `make` would otherwise generate on demand:
     isa/perf_cost_model/perf_logs/pim_perf_results_config_<CONFIG>_vf<VF>.csv
 
 Each pair is handled by benchmarks/common/ensure_cost_model.py, which reuses an
-existing CSV and locks against concurrent generation of the same one.
+existing CSV and locks against concurrent generation of the same one, so an
+interrupted run can simply be restarted.
 
-Usage:
-    python3 generate_config_files_pim_configs.py --dry-run
-    python3 generate_config_files_pim_configs.py --jobs 4
-    python3 generate_config_files_pim_configs.py --config PIMeval_Bank_LPDDR --vf 4096
+Pairs run smallest VF first, so a long sweep produces usable CSVs early. Large
+VFs are slow: each pair compiles the full lowering headers twice and runs every
+operation at that VF, and the simulator logs for VF >= 16777216 can reach tens
+of GB per pair while it runs. Limit the sweep with --max-vf if disk is tight.
+
+Each pair's output goes to perf_logs/.logs/<CONFIG>_vf<VF>.log.
+
+Usage (from the repository root, after `source env.sh`):
+    python3 isa/perf_cost_model/generate_config_files_pim_configs.py --dry-run
+    python3 isa/perf_cost_model/generate_config_files_pim_configs.py --jobs 4
+    python3 isa/perf_cost_model/generate_config_files_pim_configs.py --jobs 4 --max-vf 4194304
+    python3 isa/perf_cost_model/generate_config_files_pim_configs.py --config PIMeval_Bank_LPDDR --vf 4096
 """
 
 import argparse
@@ -22,6 +31,8 @@ import concurrent.futures
 import re
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -30,6 +41,21 @@ CONFIG_DIR = BENCH_ROOT / "configs"
 MAKEFILE = BENCH_ROOT / "Makefile"
 ENSURE = BENCH_ROOT / "common" / "ensure_cost_model.py"
 OUT_DIR = REPO_ROOT / "isa" / "perf_cost_model" / "perf_logs"
+LOG_DIR = OUT_DIR / ".logs"
+
+_print_lock = threading.Lock()
+
+
+def log(msg):
+    with _print_lock:
+        print(f"{time.strftime('%H:%M:%S')} {msg}", flush=True)
+
+
+def fmt_duration(seconds):
+    seconds = int(seconds)
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    return f"{h}h{m:02d}m{s:02d}s" if h else f"{m}m{s:02d}s"
 
 
 def read_makefile():
@@ -43,25 +69,47 @@ def read_makefile():
     return vfs, subsets
 
 
-def cost_model_pairs(configs=None, only_vfs=None):
+def csv_path(cfg, vf):
+    return OUT_DIR / f"pim_perf_results_config_{cfg.stem}_vf{vf}.csv"
+
+
+def cost_model_pairs(configs=None, exclude=None, only_vfs=None, max_vf=None):
     vfs, subsets = read_makefile()
     pairs = []
     for cfg in sorted(CONFIG_DIR.glob("*.cfg")):
         if configs and cfg.stem not in configs:
             continue
+        if exclude and cfg.stem in exclude:
+            continue
         benches = subsets.get(cfg.stem, vfs.keys())
         for vf in sorted({vfs[b] for b in benches}):
             if only_vfs and vf not in only_vfs:
                 continue
+            if max_vf and vf > max_vf:
+                continue
             pairs.append((cfg, vf))
+    # Smallest VF first; configs in name order within a VF.
+    pairs.sort(key=lambda p: (p[1], p[0].stem))
     return pairs
 
 
 def generate(pair):
     cfg, vf = pair
-    cmd = [sys.executable, str(ENSURE), "--config", str(cfg), "--vf", str(vf),
+    name = f"{cfg.stem} VF={vf}"
+    if csv_path(cfg, vf).exists():
+        log(f"exists    {name}")
+        return pair, 0, 0.0
+    log_file = LOG_DIR / f"{cfg.stem}_vf{vf}.log"
+    log(f"start     {name}  (log: {log_file.relative_to(REPO_ROOT)})")
+    cmd = [sys.executable, "-u", str(ENSURE), "--config", str(cfg), "--vf", str(vf),
            "--out-dir", str(OUT_DIR)]
-    return pair, subprocess.call(cmd)
+    start = time.time()
+    with open(log_file, "w") as out:
+        rc = subprocess.call(cmd, stdout=out, stderr=subprocess.STDOUT)
+    elapsed = time.time() - start
+    log(f"{'done' if rc == 0 else 'FAILED':<9} {name}  ({fmt_duration(elapsed)}"
+        f"{'' if rc == 0 else f', exit {rc}, see {log_file.relative_to(REPO_ROOT)}'})")
+    return pair, rc, elapsed
 
 
 def main(argv=None):
@@ -69,35 +117,52 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--config", action="append",
                     help="config name from benchmarks/configs (repeatable; default: all)")
+    ap.add_argument("--exclude-config", action="append",
+                    help="skip this config (repeatable)")
     ap.add_argument("--vf", action="append", type=int,
                     help="restrict to this VF (repeatable; default: every benchmark VF)")
-    ap.add_argument("--jobs", type=int, default=2,
-                    help="pairs generated in parallel (default: 2)")
+    ap.add_argument("--max-vf", type=int,
+                    help="skip VFs larger than this")
+    ap.add_argument("--jobs", type=int, default=4,
+                    help="pairs generated in parallel (default: 4)")
     ap.add_argument("--dry-run", action="store_true",
                     help="list the pairs and whether each CSV already exists")
     args = ap.parse_args(argv)
 
-    pairs = cost_model_pairs(args.config, args.vf)
+    pairs = cost_model_pairs(args.config, args.exclude_config, args.vf, args.max_vf)
     if not pairs:
         print("error: no (config, VF) pairs selected", file=sys.stderr)
         return 2
 
+    missing = [p for p in pairs if not csv_path(*p).exists()]
     if args.dry_run:
         for cfg, vf in pairs:
-            csv = OUT_DIR / f"pim_perf_results_config_{cfg.stem}_vf{vf}.csv"
-            print(f"{'exists ' if csv.exists() else 'missing'}  {cfg.stem:<26} VF={vf}")
-        print(f"{len(pairs)} cost models")
+            state = "exists " if csv_path(cfg, vf).exists() else "missing"
+            print(f"{state}  {cfg.stem:<26} VF={vf}")
+        print(f"{len(pairs)} cost models, {len(missing)} to generate")
         return 0
 
-    failed = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for (cfg, vf), rc in pool.map(generate, pairs):
-            if rc != 0:
-                failed.append(f"{cfg.stem} VF={vf}")
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log(f"{len(pairs)} cost models, {len(missing)} to generate, {args.jobs} in parallel")
 
-    for f in failed:
-        print(f"failed: {f}", file=sys.stderr)
-    print(f"{len(pairs) - len(failed)}/{len(pairs)} cost models ready in {OUT_DIR}")
+    start = time.time()
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        for result in pool.map(generate, pairs):
+            results.append(result)
+
+    failed = [(cfg, vf) for (cfg, vf), rc, _ in results if rc != 0]
+    print()
+    print(f"{'config':<26} {'VF':>9}  {'status':<8} time")
+    for (cfg, vf), rc, elapsed in results:
+        status = "FAILED" if rc != 0 else ("reused" if elapsed == 0.0 else "ok")
+        print(f"{cfg.stem:<26} {vf:>9}  {status:<8} {fmt_duration(elapsed) if elapsed else '-'}")
+    print()
+    print(f"{len(pairs) - len(failed)}/{len(pairs)} cost models ready in "
+          f"{OUT_DIR.relative_to(REPO_ROOT)} (total {fmt_duration(time.time() - start)})")
+    if failed:
+        print("failed: " + ", ".join(f"{c.stem} VF={v}" for c, v in failed), file=sys.stderr)
     return 1 if failed else 0
 
 
