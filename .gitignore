@@ -48,11 +48,6 @@ pim_fused_lowering.h
 check_log
 check_log_fused
 perf_logs/
-# ...but the vendored per-target cost models ARE wanted: the MISAAL
-# generator needs one per config (COST_FILE_CSV_NAME) and there is no
-# working default in PIMFusedCompiler.read_cost_dict_from_file().
-!isa/perf_cost_model/perf_logs/
-!isa/perf_cost_model/perf_logs/*.csv
 dse_logs/
 dse_logs_*/
 dse_perf_logs_*/
