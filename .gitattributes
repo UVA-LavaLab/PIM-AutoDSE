@@ -1,0 +1,31 @@
+# ---------------------------------------------------------------------------
+# Git LFS
+#
+# The ISA is already enumerated, so the lowering headers ship as INPUTS rather
+# than being regenerated at build time. They are ~98 MB and ~94 MB, well past
+# GitHub's 100 MB hard limit for regular blobs.
+#
+# NOTE: tracking here only affects NEW commits. The large benchmark datasets
+# already present in `main`'s history still need a one-time
+#   git lfs migrate import --include="..."
+# which rewrites every SHA.
+# ---------------------------------------------------------------------------
+
+isa/lowering/fused_lower.h    filter=lfs diff=lfs merge=lfs -text
+isa/lowering/unfused_lower.h  filter=lfs diff=lfs merge=lfs -text
+isa/lowering/get_perf_stats.h filter=lfs diff=lfs merge=lfs -text
+
+# Benchmark datasets that cannot be regenerated
+*.bmp  filter=lfs diff=lfs merge=lfs -text
+*.npz  filter=lfs diff=lfs merge=lfs -text
+
+# ---------------------------------------------------------------------------
+# Line endings / diff behaviour
+# ---------------------------------------------------------------------------
+*.py   text diff=python
+*.cpp  text diff=cpp
+*.h    text diff=cpp
+*.sh   text eol=lf
+*.cfg  text
+*.ini  text
+*.toml text

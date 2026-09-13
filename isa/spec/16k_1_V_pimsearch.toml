@@ -1,0 +1,25 @@
+
+title = "Searching a pattern within 8 bit elements"
+
+
+[dram_pimsearch]
+
+
+
+[dram_pimsearch.v16384_e1__v16384_e8__v1_e8]
+name = "dram_pimsearch"
+num_operands = 2
+operand_sizes = [131072, 8] # Number of bits for each operand
+operand_layouts = ["DRAM_VERT", "DRAM_VERT"] 
+operand_elem_bw = [8, 8]
+result_layout = "DRAM_VERT"
+result_size = 16384
+result_elem_bw = 1
+signedness = 1
+semantics = """\
+DEFINE dram_pimsearch_v16384_e1(a, b):
+   FOR j IN RANGE(0, 16384, 1):
+    i = j*8
+    dst[j] = (a[i+7:i] == b[7:0]) ? 1 : 0
+   ENDFOR
+"""

@@ -1,0 +1,24 @@
+
+title = "Population count of a 1-bit elements vector : TODO"
+
+
+[dram_pimpopcount]
+
+
+
+[dram_pimpopcount.v1_e16__v16384_e1]
+name = "dram_vredsum"
+num_operands = 1
+operand_sizes = [16384] # Number of bits for each operand (16384*8)
+operand_layouts = ["DRAM_VERT"] 
+operand_elem_bw = [1]
+result_layout = "DRAM_VERT"
+result_size = 16
+result_elem_bw = 16
+signedness = 1
+semantics = """\
+DEFINE dram_pimpopcount_v1_e8(a):
+   FOR i IN RANGE(0, 16384, 1):
+    dst[15:0] = dst[15:0] + ZeroExtend16(a[i]) 
+   ENDFOR
+"""
